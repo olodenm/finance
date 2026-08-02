@@ -291,7 +291,7 @@ function defaults() {
     goals: [],
     tx: [],
     trash: {},
-    sync: { url: "", token: "", lastSync: 0, at: 0, status: "", err: "" },
+    sync: { url: "", token: "", lastSync: 0, at: 0, status: "", err: "", fails: 0 },
     ui: { tab: "home", month: ym(todayStr()) }
   };
 }
@@ -299,7 +299,7 @@ function defaults() {
 let S = defaults();
 
 /* ---------- Сохранение ---------- */
-let saveTimer = null, syncTimer = null;
+let saveTimer = null, syncTimer = null, retryTimer = null;
 function save() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => { store.save(S); }, 350);
@@ -392,20 +392,40 @@ const SYNC = {
 
   async call(method, data) {
     const u = S.sync.url;
+    let r;
     if (method === "GET") {
       const q = u + (u.indexOf("?") < 0 ? "?" : "&") +
         "token=" + encodeURIComponent(S.sync.token) + "&since=" + (data.since || 0);
-      const r = await fetch(q, { method: "GET", redirect: "follow" });
-      return await r.json();
+      r = await fetch(q, { method: "GET", redirect: "follow" });
+    } else {
+      /* text/plain делает запрос «простым» — без preflight,
+         на OPTIONS Apps Script не отвечает */
+      r = await fetch(u, {
+        method: "POST", redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(Object.assign({ token: S.sync.token }, data))
+      });
     }
-    /* text/plain делает запрос «простым» — без preflight,
-       на OPTIONS Apps Script не отвечает */
-    const r = await fetch(u, {
-      method: "POST", redirect: "follow",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(Object.assign({ token: S.sync.token }, data))
-    });
-    return await r.json();
+    const text = await r.text();
+    try { return JSON.parse(text); }
+    catch (e) {
+      /* Самый частый случай: в развёртывании стоит доступ «для аккаунтов Google»,
+         и вместо JSON приходит страница входа */
+      if (/accounts\.google\.com|<!DOCTYPE|<html/i.test(text))
+        throw new Error("сервер вернул страницу входа — в развёртывании нужен доступ «Все»");
+      throw new Error("сервер ответил не по протоколу");
+    }
+  },
+
+  /** Причина по-человечески вместо технического текста */
+  reason(err) {
+    const t = String((err && err.message) || err || "");
+    if (/unauthorized/i.test(t)) return "токен не принят сервером";
+    if (/страницу входа|не по протоколу/.test(t)) return t;
+    /* Chrome — Failed to fetch, Firefox — NetworkError, Safari — Load failed */
+    if (/Failed to fetch|NetworkError|Load failed|network|fetch/i.test(t)) return "сервер не ответил";
+    if (/Lock|timeout/i.test(t)) return "таблица занята другим устройством";
+    return t || "неизвестная ошибка";
   },
 
   /** Служебные поля наружу не уходят */
@@ -503,11 +523,24 @@ const SYNC = {
     return n;
   },
 
-  /** Забрать чужое, слить, отдать своё. Курсор двигается только при успехе. */
-  async run() {
-    if (!this.configured() || this.busy) return { ok: false, msg: "пропущено" };
-    if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, msg: "нет сети" };
+  /**
+   * Обмен идёт по одному за раз. Ручной запуск не отказывает, если фоновый ещё
+   * в полёте, а дожидается его и делает свой заход — иначе кнопка ругается
+   * на собственную фоновую синхронизацию.
+   */
+  run(opts) {
+    opts = opts || {};
+    if (!this.configured()) return Promise.resolve({ ok: false, skipped: true, msg: "не настроена" });
+    if (this.pending) return opts.manual ? this.pending.then(() => this.run(opts)) : this.pending;
+    if (typeof navigator !== "undefined" && navigator.onLine === false)
+      return Promise.resolve({ ok: false, skipped: true, msg: "нет сети" });
     this.busy = true;
+    this.pending = this.cycle().finally(() => { this.pending = null; this.busy = false; });
+    return this.pending;
+  },
+
+  /** Забрать чужое, слить, отдать своё. Курсор двигается только при успехе. */
+  async cycle() {
     const since = Number(S.sync.lastSync) || 0;
     const firstRun = !since && S.tx.length === 0;
     try {
@@ -527,14 +560,22 @@ const SYNC = {
       } else {
         S.sync.lastSync = Number(pull.now) || since;
       }
-      S.sync.at = Date.now(); S.sync.status = "ok"; S.sync.err = "";
+      S.sync.at = Date.now(); S.sync.status = "ok"; S.sync.err = ""; S.sync.fails = 0;
       store.save(S);
       return { ok: true, got, sent };
     } catch (err) {
-      S.sync.status = "err"; S.sync.err = String((err && err.message) || err);
+      S.sync.fails = (S.sync.fails || 0) + 1;
+      S.sync.err = this.reason(err);
+      /* Одиночный обрыв на мобильной сети — обычное дело.
+         Тревогу поднимаем только когда не проходит три раза подряд. */
+      if (S.sync.fails >= 3) S.sync.status = "err";
       store.save(S);
-      return { ok: false, msg: S.sync.err };
-    } finally { this.busy = false; }
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => {
+        this.run().then(r => { if (r.ok) render(); });
+      }, Math.min(60000, 10000 * S.sync.fails));
+      return { ok: false, msg: S.sync.err, fails: S.sync.fails };
+    }
   }
 };
 
@@ -569,9 +610,9 @@ function banner() {
   }
   if (SYNC.configured() && S.sync.status === "err") {
     return `<div class="card warn-soft">
-      <div class="between"><span style="font-size:13px">Синхронизация не прошла</span>
+      <div class="between"><span style="font-size:13px">Синхронизация не проходит</span>
         <button class="badge" data-act="sync-now">повторить</button></div>
-      <div class="hint">${esc(S.sync.err)}</div>
+      <div class="hint">${esc(S.sync.err)}. Неудачных попыток подряд: ${S.sync.fails}. Данные на устройстве целы.</div>
     </div>`;
   }
   const days = S.settings.lastBackup ? Math.floor((Date.now() - Date.parse(S.settings.lastBackup)) / 86400000) : null;
@@ -1032,7 +1073,8 @@ function viewSettings() {
     <button class="btn ghost sm" data-act="sync-now" style="margin-top:13px">Синхронизировать сейчас</button>
     <div class="between" style="margin-top:11px"><span class="dim" style="font-size:12.5px">Состояние</span>
       <span class="badge" style="${S.sync.status === "err" ? "color:#F0918B" : S.sync.status === "ok" ? "color:var(--turq2)" : ""}">${
-        !SYNC.configured() ? "не настроена" : S.sync.status === "ok" ? "работает" : S.sync.status === "err" ? "ошибка" : "не запускалась"}</span></div>
+        !SYNC.configured() ? "не настроена" : S.sync.status === "err" ? "не проходит"
+          : S.sync.fails ? "сбой, повтор" : S.sync.status === "ok" ? "работает" : "не запускалась"}</span></div>
     <div class="between" style="margin-top:6px"><span class="dim" style="font-size:12.5px">Последний обмен</span>
       <span class="badge">${S.sync.at ? new Date(S.sync.at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</span></div>
     ${S.sync.err ? `<div class="hint pm">${esc(S.sync.err)}</div>` : ""}
@@ -1340,9 +1382,10 @@ document.addEventListener("click", e => {
 
     case "sync-now":
       toast("Синхронизация…");
-      SYNC.run().then(r => {
+      SYNC.run({ manual: true }).then(r => {
         render();
-        toast(r.ok ? `Получено ${r.got}, отправлено ${r.sent}` : "Ошибка: " + r.msg);
+        toast(!r.ok ? (r.skipped ? r.msg : "Не вышло: " + r.msg)
+          : (r.got || r.sent) ? `Получено ${r.got}, отправлено ${r.sent}` : "Всё уже совпадает");
       });
       break;
     case "export-json":
@@ -1363,7 +1406,7 @@ document.addEventListener("change", e => {
   const el = e.target;
   if (el.dataset.setS) {
     S.sync[el.dataset.setS] = (el.value || "").trim();
-    S.sync.status = ""; S.sync.err = ""; save(); render();
+    S.sync.status = ""; S.sync.err = ""; S.sync.fails = 0; save(); render();
     return;
   }
   if (el.dataset.set) {
@@ -1442,7 +1485,7 @@ function migrate() {
   S.trash = S.trash || {};
   /* старый формат надгробия — просто число */
   Object.keys(S.trash).forEach(k => { if (typeof S.trash[k] === "number") S.trash[k] = { t: S.trash[k], d: 1 }; });
-  S.sync = Object.assign({ url: "", token: "", lastSync: 0, at: 0, status: "", err: "" }, S.sync || {});
+  S.sync = Object.assign({ url: "", token: "", lastSync: 0, at: 0, status: "", err: "", fails: 0 }, S.sync || {});
   const neverSynced = !Number(S.sync.lastSync);
   [S.tx, S.accounts, S.cats, S.goals].forEach(arr => (arr || []).forEach(r => {
     if (!r.updatedAt) r.updatedAt = now;
