@@ -1,0 +1,1456 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#0E1830">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png" type="image/png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Финансы">
+<title>Финансы</title>
+<style>
+/* ================== Токены ================== */
+:root{
+  --ink:#0E1830;        /* ночной индиго — фон */
+  --ink2:#152340;       /* карточка */
+  --ink3:#1D3157;       /* поднятая поверхность */
+  --line:rgba(255,255,255,.10);
+  --text:#E9EFF8;
+  --dim:#8DA0C0;
+  --turq:#2FBFB0;       /* тимуридская бирюза — доход, норма */
+  --turq2:#3FD9C6;
+  --saffron:#E9A93C;    /* шафран — цели, внимание */
+  --pom:#D6504A;        /* гранат — расход, перерасход */
+  --lapis:#4A7EE0;      /* лазурит — переводы */
+  --r:16px;
+  --pad:14px;
+  --fd:"PT Serif",Georgia,"Times New Roman",serif;               /* акцентная */
+  --fn:"Roboto Condensed","PT Sans Narrow","Arial Narrow",Tahoma,sans-serif; /* цифры */
+  --fb:"Segoe UI",Roboto,system-ui,-apple-system,Arial,sans-serif;/* интерфейс */
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--ink);color:var(--text);font-family:var(--fb);font-size:15px;line-height:1.4}
+body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{border:0;background:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--turq2);outline-offset:2px}
+
+#app{max-width:520px;margin:0 auto;padding:0 12px}
+
+/* ================== Шапка ================== */
+.top{display:flex;align-items:center;gap:10px;padding:16px 2px 10px;position:sticky;top:0;background:linear-gradient(var(--ink) 76%,rgba(14,24,48,0));z-index:20}
+.top h1{font-family:var(--fd);font-size:21px;font-weight:700;margin:0;letter-spacing:.2px;flex:1}
+.top .sub{font-size:12px;color:var(--dim);font-weight:400;font-family:var(--fb)}
+.icon-btn{width:38px;height:38px;border-radius:12px;background:var(--ink2);display:grid;place-items:center;font-size:17px;border:1px solid var(--line)}
+
+/* ================== Карточки ================== */
+.card{background:var(--ink2);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad);margin-bottom:10px}
+.card.tight{padding:10px 12px}
+.eyebrow{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);font-weight:700;margin:0 0 8px}
+.num{font-family:var(--fn);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.big{font-size:34px;font-weight:700;line-height:1.05}
+.mid{font-size:20px;font-weight:700}
+.dim{color:var(--dim)}
+.tq{color:var(--turq)}.sf{color:var(--saffron)}.pm{color:var(--pom)}.lz{color:var(--lapis)}
+.row{display:flex;align-items:center;gap:10px}
+.between{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+hr.sep{border:0;border-top:1px solid var(--line);margin:10px 0}
+
+/* ================== Полосы ================== */
+.bar{height:8px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:6px;
+  background:repeating-linear-gradient(115deg,var(--turq) 0 9px,var(--turq2) 9px 13px)}
+.bar.warn>i{background:repeating-linear-gradient(115deg,var(--saffron) 0 9px,#F5C46B 9px 13px)}
+.bar.over>i{background:repeating-linear-gradient(115deg,var(--pom) 0 9px,#E97A74 9px 13px)}
+.bar.gold>i{background:repeating-linear-gradient(115deg,var(--saffron) 0 9px,#FFD27A 9px 13px)}
+
+/* ================== Пульс месяца (сигнатура) ================== */
+.pulse{width:100%;height:78px;display:block}
+.pulse rect.d{transform-box:fill-box;transform-origin:bottom;animation:grow .5s cubic-bezier(.2,.9,.3,1) both}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.pulse-legend{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);margin-top:4px}
+
+/* ================== Списки ================== */
+.li{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line)}
+.li:last-child{border-bottom:0}
+.ic{width:36px;height:36px;border-radius:11px;background:var(--ink3);display:grid;place-items:center;font-size:17px;flex:none}
+.li .t{flex:1;min-width:0}
+.li .t b{display:block;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .t span{font-size:12px;color:var(--dim)}
+.li .v{font-family:var(--fn);font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;white-space:nowrap}
+.daybar{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);padding:12px 0 4px;letter-spacing:.02em}
+
+/* ================== Чипы / сегменты ================== */
+.seg{display:flex;background:var(--ink);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;padding:9px 4px;border-radius:9px;font-size:13px;font-weight:600;color:var(--dim)}
+.seg button.on{background:var(--ink3);color:var(--text)}
+.seg button.on[data-k="expense"]{background:rgba(214,80,74,.22);color:#F0918B}
+.seg button.on[data-k="income"]{background:rgba(47,191,176,.2);color:var(--turq2)}
+.seg button.on[data-k="transfer"]{background:rgba(74,126,224,.2);color:#8FB4F5}
+.seg button.on[data-k="goal"]{background:rgba(233,169,60,.2);color:#F5C46B}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{padding:8px 11px;border-radius:11px;background:var(--ink3);border:1px solid transparent;font-size:13px;display:flex;gap:6px;align-items:center}
+.chip.on{border-color:var(--turq);background:rgba(47,191,176,.16)}
+.chip.sm{padding:6px 10px;font-size:12.5px}
+
+/* ================== Поля ================== */
+label.f{display:block;margin:12px 0 6px;font-size:11.5px;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;font-weight:700}
+.inp{width:100%;padding:11px 12px;border-radius:12px;background:var(--ink);border:1px solid var(--line);color:var(--text)}
+select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.btn{display:block;width:100%;padding:14px;border-radius:13px;background:var(--turq);color:#06231F;font-weight:700;font-size:15px;text-align:center}
+.btn.ghost{background:var(--ink3);color:var(--text)}
+.btn.danger{background:rgba(214,80,74,.16);color:#F0918B}
+.btn.sm{padding:9px;font-size:13.5px}
+
+/* ================== Навигация ================== */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;justify-content:center;
+  background:rgba(14,24,48,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  padding:6px 0 calc(6px + env(safe-area-inset-bottom))}
+.tabs .in{display:flex;width:100%;max-width:520px}
+.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 0;color:var(--dim);font-size:10px;font-weight:600}
+.tabs button em{font-style:normal;font-size:18px;line-height:1}
+.tabs button.on{color:var(--turq2)}
+#fab{position:fixed;z-index:31;right:max(14px,calc(50% - 260px + 14px));bottom:calc(80px + env(safe-area-inset-bottom));
+  width:58px;height:58px;border-radius:20px;background:var(--saffron);color:#2A1A02;font-size:30px;font-weight:700;
+  display:grid;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+
+/* ================== Шторка ================== */
+.sheet{position:fixed;inset:0;z-index:60;background:rgba(5,9,20,.6);display:flex;align-items:flex-end;justify-content:center}
+.sheet[hidden]{display:none}
+.sheet .card2{width:100%;max-width:520px;max-height:94vh;overflow:auto;background:var(--ink2);
+  border:1px solid var(--line);border-bottom:0;border-radius:22px 22px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
+  animation:up .22s cubic-bezier(.2,.9,.3,1)}
+@keyframes up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}
+.grab{width:38px;height:4px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+
+/* ================== Клавиатура ================== */
+.amount{text-align:center;padding:10px 0 4px}
+.amount .v{font-family:var(--fn);font-size:42px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.amount .c{font-size:12px;color:var(--dim);margin-top:2px}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
+.pad button{padding:14px 0;border-radius:12px;background:var(--ink3);font-family:var(--fn);font-size:21px;font-weight:700}
+.pad button.alt{background:var(--ink);color:var(--dim);font-size:17px}
+
+/* ================== Прочее ================== */
+.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:var(--ink3);border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:13.5px;z-index:80;
+  opacity:0;pointer-events:none;transition:opacity .18s}
+.toast.on{opacity:1}
+.empty{text-align:center;color:var(--dim);padding:26px 12px;font-size:13.5px}
+.lvl{display:flex;gap:5px;margin-top:8px}
+.lvl i{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.08)}
+.lvl i.on{background:var(--saffron)}
+.dots{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.dots i{width:11px;height:11px;border-radius:4px;background:rgba(255,255,255,.09)}
+.dots i.on{background:var(--turq)}
+.dots i.half{background:linear-gradient(90deg,var(--turq) 50%,rgba(255,255,255,.09) 50%)}
+.badge{font-size:10.5px;padding:3px 7px;border-radius:7px;background:var(--ink3);color:var(--dim);font-weight:700}
+.hint{font-size:12px;color:var(--dim);margin-top:6px}
+.card.alarm{border-color:rgba(214,80,74,.55);background:linear-gradient(var(--ink2),rgba(214,80,74,.10))}
+.card.warn-soft{border-color:rgba(233,169,60,.35);padding:10px 12px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top" id="top"></div>
+  <main id="view"></main>
+</div>
+<button id="fab" aria-label="Добавить операцию">+</button>
+<nav class="tabs"><div class="in" id="tabs"></div></nav>
+<div class="sheet" id="sheet" hidden><div class="card2" id="sheetBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ==========================================================
+   Личные финансы — автономное приложение (UZS + USD)
+   Хранилище: window.storage → localStorage → память
+   ========================================================== */
+
+const KEY = "pf_uz_v1";
+
+/* ---------- Адаптер хранилища ---------- */
+const store = (() => {
+  let mem = null;
+  const hasW = typeof window !== "undefined" && window.storage && typeof window.storage.get === "function";
+  let hasLS = false;
+  try { localStorage.setItem("__t", "1"); localStorage.removeItem("__t"); hasLS = true; } catch (e) { hasLS = false; }
+  return {
+    /** "облако" | "устройство" | "только память" — последний вариант означает потерю данных при закрытии */
+    mode: hasW ? "облако" : (hasLS ? "устройство" : "только память"),
+    volatile: !hasW && !hasLS,
+    persisted: null,      // ответ navigator.storage.persist()
+    lastOk: true,         // удалась ли последняя запись
+    async load() {
+      if (hasW) { try { const r = await window.storage.get(KEY); if (r && r.value) return JSON.parse(r.value); } catch (e) {} }
+      if (hasLS) { try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch (e) {} }
+      return mem;
+    },
+    async save(obj) {
+      const s = JSON.stringify(obj);
+      mem = obj;
+      if (hasW) { try { await window.storage.set(KEY, s); this.lastOk = true; return true; } catch (e) {} }
+      if (hasLS) { try { localStorage.setItem(KEY, s); this.lastOk = true; return true; } catch (e) {} }
+      this.lastOk = !hasW && !hasLS ? false : false;
+      return false;
+    },
+    /** Просим браузер не вычищать хранилище при нехватке места */
+    async requestPersist() {
+      try {
+        if (typeof navigator !== "undefined" && navigator.storage && navigator.storage.persist) {
+          this.persisted = await navigator.storage.persist();
+          return this.persisted;
+        }
+      } catch (e) {}
+      this.persisted = null;
+      return null;
+    }
+  };
+})();
+
+/* ---------- Утилиты ---------- */
+const uid = () => Math.random().toString(36).slice(2, 9);
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad2 = n => String(n).padStart(2, "0");
+const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); };
+const ym = d => String(d).slice(0, 7);
+const daysInMonth = m => new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate();
+const MONTHS = ["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+const MONTHS_SHORT = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+const monthName = m => MONTHS[+m.slice(5, 7) - 1] + " " + m.slice(0, 4);
+const shiftMonth = (m, k) => { const d = new Date(+m.slice(0, 4), +m.slice(5, 7) - 1 + k, 1); return d.getFullYear() + "-" + pad2(d.getMonth() + 1); };
+
+const nf0 = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
+const nf2 = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmt(v, cur) {
+  if (cur === "USD") return "$" + nf2.format(v || 0);
+  return nf0.format(Math.round(v || 0)) + " сум";
+}
+function fmtShort(v) {
+  const a = Math.abs(v || 0), sign = v < 0 ? "−" : "";
+  if (a >= 1e9) return sign + (a / 1e9).toFixed(2).replace(".", ",") + " млрд";
+  if (a >= 1e6) return sign + (a / 1e6).toFixed(a >= 1e8 ? 0 : 1).replace(".", ",") + " млн";
+  if (a >= 1e4) return sign + nf0.format(Math.round(a / 1e3)) + " тыс";
+  return sign + nf0.format(Math.round(a));
+}
+function plural(n, one, few, many) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b > 1 && b < 5) return few;
+  if (b === 1) return one;
+  return many;
+}
+
+/* ---------- Состояние по умолчанию ---------- */
+function defaults() {
+  const ts = Date.now();
+  /* seed — запись по умолчанию: при первом обмене с непустой таблицей такие сносятся,
+     иначе на каждом новом устройстве появился бы свой комплект счетов и категорий */
+  const A = (name, cur, icon, opening) => ({ id: uid(), name, cur, icon, opening: opening || 0, updatedAt: ts, dirty: 1, seed: 1 });
+  const C = (name, kind, icon, fixed) => ({ id: uid(), name, kind, icon, fixed: !!fixed, budget: 0, updatedAt: ts, dirty: 1, seed: 1 });
+  return {
+    v: 1,
+    settings: { rate: 12800, incomeTarget: 0, hours: 176, safety: 6, start: todayStr(), updatedAt: ts, dirty: 1 },
+    accounts: [
+      A("Наличные", "UZS", "💵"),
+      A("Карта UZS", "UZS", "💳"),
+      A("Наличные USD", "USD", "💲"),
+      A("Депозит USD", "USD", "🏦")
+    ],
+    cats: [
+      C("Продукты", "expense", "🛒"),
+      C("Кафе и рестораны", "expense", "🍽"),
+      C("Такси и транспорт", "expense", "🚕"),
+      C("Топливо", "expense", "⛽"),
+      C("Аренда", "expense", "🏠", true),
+      C("Коммуналка", "expense", "💡", true),
+      C("Связь и интернет", "expense", "📶", true),
+      C("Детский сад", "expense", "🧸", true),
+      C("Здоровье", "expense", "💊"),
+      C("Одежда", "expense", "👕"),
+      C("Дом и быт", "expense", "🧴"),
+      C("Парфюм и уход", "expense", "🧪"),
+      C("Развлечения", "expense", "🎬"),
+      C("Подарки", "expense", "🎁"),
+      C("Образование", "expense", "📚"),
+      C("Прочее", "expense", "•"),
+      C("Зарплата", "income", "💼"),
+      C("Премия", "income", "🏅"),
+      C("Подработка", "income", "⚡"),
+      C("Проценты", "income", "📈"),
+      C("Возврат", "income", "↩️")
+    ],
+    goals: [],
+    tx: [],
+    trash: {},
+    sync: { url: "", token: "", lastSync: 0, at: 0, status: "", err: "" },
+    ui: { tab: "home", month: ym(todayStr()) }
+  };
+}
+
+let S = defaults();
+
+/* ---------- Сохранение ---------- */
+let saveTimer = null, syncTimer = null;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { store.save(S); }, 350);
+  /* Фоновая отправка: не во время активной синхронизации, иначе получится петля */
+  if (S.sync && S.sync.url && !SYNC.busy) {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => { SYNC.run().then(r => { if (r.ok && (r.got || r.sent)) render(); }); }, 4000);
+  }
+}
+/** Метка изменения (для слияния) и флаг «ещё не отправлено» */
+const touch = o => { o.updatedAt = Date.now(); o.dirty = 1; return o; };
+/** Надгробие: простое удаление синхронизацию не переживает — запись вернулась бы с другого устройства */
+const bury = (type, id) => { S.trash[type + ":" + id] = { t: Date.now(), d: 1 }; };
+
+/* ---------- Справочники ---------- */
+const acc = id => S.accounts.find(a => a.id === id);
+const cat = id => S.cats.find(c => c.id === id);
+const goal = id => S.goals.find(g => g.id === id);
+const rate = () => +S.settings.rate || 1;
+/** Сумма операции в базовой валюте (сум) */
+const toBase = t => t.cur === "USD" ? (t.amount || 0) * (+t.rate || rate()) : (t.amount || 0);
+
+/* ---------- Балансы ---------- */
+function balances() {
+  const m = {};
+  S.accounts.forEach(a => m[a.id] = +a.opening || 0);
+  S.tx.forEach(t => {
+    if (t.kind === "income") m[t.acc] = (m[t.acc] || 0) + t.amount;
+    else if (t.kind === "expense" || t.kind === "goal") m[t.acc] = (m[t.acc] || 0) - t.amount;
+    else if (t.kind === "transfer") {
+      m[t.acc] = (m[t.acc] || 0) - t.amount;
+      m[t.acc2] = (m[t.acc2] || 0) + (t.amount2 != null ? t.amount2 : t.amount);
+    }
+  });
+  return m;
+}
+function totalBase() {
+  const b = balances();
+  return S.accounts.reduce((s, a) => s + (b[a.id] || 0) * (a.cur === "USD" ? rate() : 1), 0);
+}
+
+/* ---------- Статистика месяца ---------- */
+function monthStats(m) {
+  const r = { inc: 0, exp: 0, sav: 0, fixed: 0, byCat: {}, byDay: {}, n: 0 };
+  S.tx.forEach(t => {
+    if (ym(t.date) !== m) return;
+    const b = toBase(t);
+    if (t.kind === "income") r.inc += b;
+    else if (t.kind === "expense") {
+      r.exp += b; r.n++;
+      r.byCat[t.cat] = (r.byCat[t.cat] || 0) + b;
+      r.byDay[t.date] = (r.byDay[t.date] || 0) + b;
+      const c = cat(t.cat); if (c && c.fixed) r.fixed += b;
+    } else if (t.kind === "goal") r.sav += b;
+  });
+  r.net = r.inc - r.exp - r.sav;
+  return r;
+}
+/** Средний расход за последние n завершённых месяцев (без текущего) */
+function avgExpense(n) {
+  const cur = ym(todayStr());
+  let sum = 0, k = 0;
+  for (let i = 1; i <= n; i++) {
+    const m = shiftMonth(cur, -i);
+    const s = monthStats(m);
+    if (s.exp > 0) { sum += s.exp; k++; }
+  }
+  if (!k) { const s = monthStats(cur); return s.exp; }
+  return sum / k;
+}
+function incomeSeries(n) {
+  const cur = ym(todayStr()), out = [];
+  for (let i = n - 1; i >= 0; i--) { const m = shiftMonth(cur, -i); out.push({ m, v: monthStats(m).inc }); }
+  return out;
+}
+function budgetTotal() { return S.cats.filter(c => c.kind === "expense").reduce((s, c) => s + (+c.budget || 0), 0); }
+function goalSaved(g) {
+  return S.tx.filter(t => t.kind === "goal" && t.goal === g.id).reduce((s, t) => s + toBase(t), 0) + (+g.initial || 0);
+}
+const goalTargetBase = g => (+g.target || 0) * (g.cur === "USD" ? rate() : 1);
+
+/* ==========================================================
+   Синхронизация с Google Sheets через Apps Script
+   ========================================================== */
+const SYNC_TYPES = { account: "accounts", cat: "cats", goal: "goals" };
+
+const SYNC = {
+  busy: false,
+  configured() { return !!(S.sync && S.sync.url && S.sync.token); },
+
+  async call(method, data) {
+    const u = S.sync.url;
+    if (method === "GET") {
+      const q = u + (u.indexOf("?") < 0 ? "?" : "&") +
+        "token=" + encodeURIComponent(S.sync.token) + "&since=" + (data.since || 0);
+      const r = await fetch(q, { method: "GET", redirect: "follow" });
+      return await r.json();
+    }
+    /* text/plain делает запрос «простым» — без preflight,
+       на OPTIONS Apps Script не отвечает */
+    const r = await fetch(u, {
+      method: "POST", redirect: "follow",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(Object.assign({ token: S.sync.token }, data))
+    });
+    return await r.json();
+  },
+
+  /** Служебные поля наружу не уходят */
+  clean(x) { return JSON.stringify(Object.assign({}, x, { dirty: undefined, seed: undefined })); },
+
+  /**
+   * Неотправленные изменения.
+   * Отбор идёт по флагу, а не по сравнению меток: updatedAt ставят часы устройства,
+   * а курсор приходит с часов Google — при расхождении сравнение гнало бы архив в каждый цикл.
+   */
+  collect() {
+    const tx = S.tx.filter(t => t.dirty).map(t => Object.assign({ deleted: 0 }, t));
+    const dict = [];
+    Object.keys(SYNC_TYPES).forEach(type => {
+      (S[SYNC_TYPES[type]] || []).forEach(x => {
+        if (x.dirty) dict.push({ id: x.id, type, updatedAt: x.updatedAt, deleted: 0, json: this.clean(x) });
+      });
+    });
+    if (S.settings.dirty)
+      dict.push({ id: "settings", type: "settings", updatedAt: S.settings.updatedAt, deleted: 0, json: this.clean(S.settings) });
+    Object.keys(S.trash).forEach(k => {
+      const e = S.trash[k];
+      if (!e || !e.d) return;
+      const cut = k.indexOf(":"), type = k.slice(0, cut), id = k.slice(cut + 1);
+      if (type === "tx") tx.push({ id, updatedAt: e.t, deleted: 1 });
+      else dict.push({ id, type, updatedAt: e.t, deleted: 1, json: "" });
+    });
+    return { tx, dict };
+  },
+
+  /** Снять флаги после подтверждённой отправки */
+  clearDirty(payload) {
+    const un = (arr, id) => { const o = (arr || []).find(x => x.id === id); if (o) delete o.dirty; };
+    payload.tx.forEach(r => { un(S.tx, r.id); const k = "tx:" + r.id; if (S.trash[k]) S.trash[k].d = 0; });
+    payload.dict.forEach(r => {
+      if (r.type === "settings") { delete S.settings.dirty; return; }
+      const key = SYNC_TYPES[r.type];
+      if (key) un(S[key], r.id);
+      const k = r.type + ":" + r.id; if (S.trash[k]) S.trash[k].d = 0;
+    });
+  },
+
+  /** Снести записи по умолчанию, если таблица уже наполнена другим устройством */
+  dropSeed(pull) {
+    const has = t => (pull.dict || []).some(r => String(r.type) === t && !Number(r.deleted));
+    if (has("account")) S.accounts = S.accounts.filter(a => !a.seed);
+    if (has("cat")) S.cats = S.cats.filter(c => !c.seed);
+  },
+
+  /** Приведение типов: из таблицы всё приходит строками и числами вперемешку */
+  normTx(r) {
+    const num = v => (v === "" || v == null ? undefined : Number(v));
+    const str = v => (v === "" || v == null ? undefined : String(v));
+    return {
+      id: String(r.id), updatedAt: Number(r.updatedAt) || 0, kind: String(r.kind || "expense"),
+      date: String(r.date || todayStr()).slice(0, 10), amount: Number(r.amount) || 0,
+      cur: String(r.cur || "UZS"), rate: num(r.rate), acc: str(r.acc), acc2: str(r.acc2),
+      amount2: num(r.amount2), cat: str(r.cat), goal: str(r.goal),
+      note: r.note == null ? "" : String(r.note)
+    };
+  },
+
+  /** Слияние: побеждает запись с более поздним updatedAt */
+  merge(pull) {
+    let n = 0;
+    (pull.tx || []).forEach(r => {
+      const id = String(r.id), ts = Number(r.updatedAt) || 0;
+      const i = S.tx.findIndex(t => t.id === id);
+      const localTs = i >= 0 ? (S.tx[i].updatedAt || 0) : ((S.trash["tx:" + id] || {}).t || 0);
+      if (ts <= localTs) return;
+      if (Number(r.deleted)) { if (i >= 0) S.tx.splice(i, 1); S.trash["tx:" + id] = { t: ts, d: 0 }; }
+      else { const o = this.normTx(r); if (i >= 0) S.tx[i] = o; else S.tx.push(o); delete S.trash["tx:" + id]; }
+      n++;
+    });
+    (pull.dict || []).forEach(r => {
+      const id = String(r.id), type = String(r.type), ts = Number(r.updatedAt) || 0;
+      if (type === "settings") {
+        if (ts <= (S.settings.updatedAt || 0)) return;
+        try { S.settings = Object.assign(S.settings, JSON.parse(r.json), { updatedAt: ts }); n++; } catch (e) {}
+        return;
+      }
+      const key = SYNC_TYPES[type]; if (!key) return;
+      const arr = S[key], i = arr.findIndex(x => x.id === id);
+      const localTs = i >= 0 ? (arr[i].updatedAt || 0) : ((S.trash[type + ":" + id] || {}).t || 0);
+      if (ts <= localTs) return;
+      if (Number(r.deleted)) { if (i >= 0) arr.splice(i, 1); S.trash[type + ":" + id] = { t: ts, d: 0 }; }
+      else {
+        let o; try { o = JSON.parse(r.json); } catch (e) { return; }
+        o.id = id; o.updatedAt = ts;
+        if (i >= 0) arr[i] = o; else arr.push(o);
+        delete S.trash[type + ":" + id];
+      }
+      n++;
+    });
+    return n;
+  },
+
+  /** Забрать чужое, слить, отдать своё. Курсор двигается только при успехе. */
+  async run() {
+    if (!this.configured() || this.busy) return { ok: false, msg: "пропущено" };
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, msg: "нет сети" };
+    this.busy = true;
+    const since = Number(S.sync.lastSync) || 0;
+    const firstRun = !since && S.tx.length === 0;
+    try {
+      const pull = await this.call("GET", { since });
+      if (!pull || !pull.ok) throw new Error((pull && pull.error) || "нет ответа");
+      const got = this.merge(pull);
+      if (firstRun) this.dropSeed(pull);
+
+      const payload = this.collect();
+      let sent = 0;
+      if (payload.tx.length || payload.dict.length) {
+        const push = await this.call("POST", payload);
+        if (!push || !push.ok) throw new Error((push && push.error) || "отказ при отправке");
+        this.clearDirty(payload);
+        sent = payload.tx.length + payload.dict.length;
+        S.sync.lastSync = Number(push.now) || since;
+      } else {
+        S.sync.lastSync = Number(pull.now) || since;
+      }
+      S.sync.at = Date.now(); S.sync.status = "ok"; S.sync.err = "";
+      store.save(S);
+      return { ok: true, got, sent };
+    } catch (err) {
+      S.sync.status = "err"; S.sync.err = String((err && err.message) || err);
+      store.save(S);
+      return { ok: false, msg: S.sync.err };
+    } finally { this.busy = false; }
+  }
+};
+
+/* ==========================================================
+   Отрисовка
+   ========================================================== */
+const TABS = [
+  { k: "home", i: "◈", n: "Сводка" },
+  { k: "log", i: "≡", n: "Журнал" },
+  { k: "stat", i: "◧", n: "Аналитика" },
+  { k: "goals", i: "◎", n: "Цели" },
+  { k: "income", i: "▲", n: "Доход" }
+];
+
+function render() {
+  $("tabs").innerHTML = TABS.map(t =>
+    `<button data-act="tab" data-tab="${t.k}" class="${S.ui.tab === t.k ? "on" : ""}"><em>${t.i}</em>${t.n}</button>`).join("");
+  const v = { home: viewHome, log: viewLog, stat: viewStat, goals: viewGoals, income: viewIncome, settings: viewSettings }[S.ui.tab];
+  $("view").innerHTML = banner() + v();
+  $("fab").style.display = S.ui.tab === "settings" ? "none" : "grid";
+  window.scrollTo({ top: 0 });
+}
+
+/** Предупреждения о сохранности данных — показываются над любым экраном */
+function banner() {
+  if (store.volatile || !store.lastOk) {
+    return `<div class="card alarm">
+      <div class="eyebrow" style="color:#F0918B">Данные не сохраняются</div>
+      <div class="hint" style="color:var(--text)">Страница открыта так, что браузер не даёт ей постоянное хранилище (обычно это <b>content://</b> или повторно скачанный файл). Всё, что введено, исчезнет при закрытии вкладки.</div>
+      <button class="btn danger sm" data-act="export-json" style="margin-top:11px">Скачать бэкап прямо сейчас</button>
+    </div>`;
+  }
+  if (SYNC.configured() && S.sync.status === "err") {
+    return `<div class="card warn-soft">
+      <div class="between"><span style="font-size:13px">Синхронизация не прошла</span>
+        <button class="badge" data-act="sync-now">повторить</button></div>
+      <div class="hint">${esc(S.sync.err)}</div>
+    </div>`;
+  }
+  const days = S.settings.lastBackup ? Math.floor((Date.now() - Date.parse(S.settings.lastBackup)) / 86400000) : null;
+  if (S.tx.length >= 10 && (days === null || days >= 14)) {
+    return `<div class="card warn-soft">
+      <div class="between"><span style="font-size:13px">${days === null ? "Бэкап ни разу не делался" : "Последний бэкап " + days + " " + plural(days, "день", "дня", "дней") + " назад"}</span>
+        <button class="badge" data-act="export-json">скачать</button></div>
+    </div>`;
+  }
+  return "";
+}
+
+function header(title, sub, gear) {
+  return `<h1>${esc(title)}${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</h1>` +
+    (gear === false ? "" : `<button class="icon-btn" data-act="settings" aria-label="Настройки">⚙</button>`);
+}
+function monthNav(sub) {
+  return `<button class="icon-btn" data-act="mprev" aria-label="Предыдущий месяц">‹</button>
+          <h1 style="text-align:center">${esc(monthName(S.ui.month))}${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</h1>
+          <button class="icon-btn" data-act="mnext" aria-label="Следующий месяц">›</button>`;
+}
+
+/* ---------------- Сводка ---------------- */
+function viewHome() {
+  const m = S.ui.month, s = monthStats(m), cur = ym(todayStr());
+  const dm = daysInMonth(m);
+  const isCur = m === cur;
+  const dayNow = isCur ? new Date().getDate() : dm;
+  const bud = budgetTotal();
+  const forecast = dayNow > 0 ? s.exp / dayNow * dm : 0;
+  const left = bud > 0 ? bud - s.exp : 0;
+  const daysLeft = Math.max(1, dm - dayNow + (isCur ? 1 : 0));
+  const perDay = bud > 0 ? left / daysLeft : 0;
+  const bals = balances();
+
+  $("top").innerHTML = monthNav("сводка");
+
+  /* Пульс месяца — сигнатурная полоса */
+  const maxDay = Math.max(1, ...Object.values(s.byDay));
+  const dayBudget = bud > 0 ? bud / dm : maxDay * 0.6;
+  const W = 100, H = 62, gap = 0.5;
+  const bw = (W - gap * (dm - 1)) / dm;
+  let bars = "";
+  const incDays = {};
+  S.tx.forEach(t => { if (t.kind === "income" && ym(t.date) === m) incDays[+t.date.slice(8, 10)] = 1; });
+  for (let d = 1; d <= dm; d++) {
+    const key = m + "-" + pad2(d), v = s.byDay[key] || 0;
+    const x = (d - 1) * (bw + gap);
+    const h = v > 0 ? Math.max(2, v / maxDay * (H - 8)) : 0;
+    const future = isCur && d > dayNow;
+    const col = v === 0 ? "rgba(255,255,255,.06)" : (v > dayBudget * 1.6 ? "var(--pom)" : v > dayBudget ? "var(--saffron)" : "var(--turq)");
+    if (h > 0) bars += `<rect class="d" x="${x.toFixed(2)}" y="${(H - h).toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}" rx="${Math.min(0.9, bw / 2).toFixed(2)}" fill="${col}" style="animation-delay:${d * 9}ms"/>`;
+    else bars += `<rect x="${x.toFixed(2)}" y="${H - 1.6}" width="${bw.toFixed(2)}" height="1.6" rx=".6" fill="${future ? "rgba(255,255,255,.05)" : "rgba(255,255,255,.11)"}"/>`;
+    if (incDays[d]) bars += `<rect x="${x.toFixed(2)}" y="0" width="${bw.toFixed(2)}" height="2.6" rx="1" fill="var(--saffron)"/>`;
+  }
+  if (bud > 0) {
+    const y = H - (dayBudget / maxDay * (H - 8));
+    if (y > 2 && y < H) bars += `<line x1="0" x2="${W}" y1="${y.toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,.28)" stroke-width=".4" stroke-dasharray="1.5 1.5"/>`;
+  }
+
+  const goalsRow = S.goals.filter(g => !g.done).slice(0, 3).map(g => {
+    const sv = goalSaved(g), tg = goalTargetBase(g), p = tg > 0 ? Math.min(1, sv / tg) : 0;
+    return `<div style="flex:1;min-width:0">
+      <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.name)}</div>
+      <div class="bar gold" style="margin-top:5px"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
+      <div class="dim num" style="font-size:11px;margin-top:3px">${Math.round(p * 100)}%</div>
+    </div>`;
+  }).join("");
+
+  const recent = S.tx.slice().sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id)).slice(0, 5).map(txRow).join("");
+
+  return `
+  <div class="card">
+    <div class="eyebrow">Пульс месяца</div>
+    <svg class="pulse" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>
+    <div class="pulse-legend"><span>1</span><span>каждая полоса — день</span><span>${dm}</span></div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Всего на счетах</div>
+    <div class="num big">${nf0.format(Math.round(totalBase()))}<span style="font-size:16px;color:var(--dim)"> сум</span></div>
+    <div class="hint">по курсу ${nf0.format(rate())} сум за $1</div>
+    <hr class="sep">
+    ${S.accounts.map(a => `<div class="between" style="padding:4px 0">
+        <span class="dim" style="font-size:13px">${a.icon || "•"} ${esc(a.name)}</span>
+        <span class="num" style="font-weight:600;font-size:14px">${fmt(bals[a.id] || 0, a.cur)}</span>
+      </div>`).join("")}
+  </div>
+
+  <div class="grid3">
+    <div class="card tight"><div class="eyebrow">Доход</div><div class="num mid tq">${fmtShort(s.inc)}</div></div>
+    <div class="card tight"><div class="eyebrow">Расход</div><div class="num mid pm">${fmtShort(s.exp)}</div></div>
+    <div class="card tight"><div class="eyebrow">Остаток</div><div class="num mid ${s.net >= 0 ? "" : "pm"}">${fmtShort(s.net)}</div></div>
+  </div>
+
+  ${bud > 0 ? `<div class="card">
+    <div class="between"><div class="eyebrow" style="margin:0">Бюджет месяца</div>
+      <span class="badge">${Math.round(s.exp / bud * 100)}%</span></div>
+    <div class="bar ${s.exp > bud ? "over" : s.exp > bud * .8 ? "warn" : ""}" style="margin:10px 0 8px"><i style="width:${Math.min(100, s.exp / bud * 100).toFixed(1)}%"></i></div>
+    <div class="between"><span class="dim" style="font-size:12.5px">Потрачено ${fmtShort(s.exp)} из ${fmtShort(bud)}</span>
+      <span class="num" style="font-size:13px">прогноз ${fmtShort(forecast)}</span></div>
+    ${isCur ? `<hr class="sep"><div class="between"><span class="dim" style="font-size:12.5px">Можно тратить в день</span>
+      <span class="num mid ${perDay < 0 ? "pm" : "tq"}">${fmtShort(perDay)}</span></div>
+      <div class="hint">осталось ${daysLeft} ${plural(daysLeft, "день", "дня", "дней")}</div>` : ""}
+  </div>` : `<div class="card"><div class="eyebrow">Бюджет не задан</div>
+    <div class="hint">Проставь месячные лимиты по категориям в настройках — появится дневной лимит и прогноз.</div>
+    <button class="btn ghost sm" data-act="settings" style="margin-top:10px">Открыть настройки</button></div>`}
+
+  ${goalsRow ? `<div class="card"><div class="eyebrow">Цели</div><div class="row" style="align-items:flex-start">${goalsRow}</div></div>` : ""}
+
+  <div class="card">
+    <div class="between"><div class="eyebrow" style="margin:0">Последние операции</div>
+      <button class="badge" data-act="tab" data-tab="log">весь журнал</button></div>
+    <div style="margin-top:6px">${recent || `<div class="empty">Пока пусто. Нажми «+», чтобы записать первую операцию.</div>`}</div>
+  </div>`;
+}
+
+/* ---------------- Журнал ---------------- */
+function txRow(t) {
+  const c = cat(t.cat), a = acc(t.acc);
+  let icon = c ? c.icon : "•", title = c ? c.name : "Операция", sign = "−", cls = "";
+  if (t.kind === "income") { sign = "+"; cls = "tq"; }
+  else if (t.kind === "transfer") { icon = "⇄"; title = "Перевод"; sign = ""; cls = "lz"; }
+  else if (t.kind === "goal") { const g = goal(t.goal); icon = "◎"; title = g ? g.name : "В цель"; sign = "→"; cls = "sf"; }
+  const sub = [t.date.slice(8, 10) + " " + MONTHS_SHORT[+t.date.slice(5, 7) - 1],
+    t.kind === "transfer" ? (acc(t.acc) ? acc(t.acc).name : "") + " → " + (acc(t.acc2) ? acc(t.acc2).name : "") : (a ? a.name : ""),
+    t.note].filter(Boolean).join(" · ");
+  return `<div class="li" data-act="edit" data-id="${t.id}">
+    <div class="ic">${icon}</div>
+    <div class="t"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
+    <div class="v ${cls}">${sign}${nf0.format(Math.round(t.cur === "USD" ? t.amount : t.amount))}${t.cur === "USD" ? " $" : ""}</div>
+  </div>`;
+}
+function viewLog() {
+  $("top").innerHTML = monthNav("журнал");
+  const list = S.tx.filter(t => ym(t.date) === S.ui.month).sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
+  if (!list.length) return `<div class="card"><div class="empty">В этом месяце операций нет.</div></div>`;
+  const byDate = {};
+  list.forEach(t => { (byDate[t.date] = byDate[t.date] || []).push(t); });
+  return Object.keys(byDate).sort().reverse().map(d => {
+    const day = byDate[d];
+    const sum = day.reduce((s, t) => s + (t.kind === "expense" ? toBase(t) : 0), 0);
+    const dd = new Date(d);
+    return `<div class="card">
+      <div class="between"><span class="eyebrow" style="margin:0">${d.slice(8, 10)} ${MONTHS_SHORT[+d.slice(5, 7) - 1]}, ${["вс","пн","вт","ср","чт","пт","сб"][dd.getDay()]}</span>
+        <span class="badge num">${sum ? "−" + fmtShort(sum) : "—"}</span></div>
+      <div style="margin-top:4px">${day.map(txRow).join("")}</div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------------- Аналитика ---------------- */
+function viewStat() {
+  $("top").innerHTML = monthNav("аналитика");
+  const m = S.ui.month, s = monthStats(m);
+  if (!s.inc && !s.exp && !s.sav) return `<div class="card"><div class="empty">Нет данных за ${monthName(m)}.</div></div>`;
+
+  const cats = Object.keys(s.byCat).map(id => ({ c: cat(id), v: s.byCat[id] }))
+    .filter(x => x.c).sort((a, b) => b.v - a.v);
+  const maxC = Math.max(1, ...cats.map(x => x.v));
+  const rows = cats.map(x => {
+    const bud = +x.c.budget || 0, over = bud > 0 && x.v > bud;
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <div class="between"><span style="font-size:13.5px">${x.c.icon} ${esc(x.c.name)}${x.c.fixed ? ` <span class="badge">обяз.</span>` : ""}</span>
+        <span class="num" style="font-weight:700;font-size:13.5px">${fmtShort(x.v)}</span></div>
+      <div class="bar ${over ? "over" : ""}" style="margin-top:6px;height:6px"><i style="width:${(x.v / maxC * 100).toFixed(1)}%"></i></div>
+      <div class="between" style="margin-top:4px">
+        <span class="dim" style="font-size:11px">${(x.v / s.exp * 100).toFixed(1)}% расходов</span>
+        ${bud > 0 ? `<span class="dim num" style="font-size:11px">${over ? "перерасход " + fmtShort(x.v - bud) : "в лимите, остаток " + fmtShort(bud - x.v)}</span>` : ""}
+      </div></div>`;
+  }).join("");
+
+  /* Тренд 6 месяцев */
+  const ser = [];
+  for (let i = 5; i >= 0; i--) { const mm = shiftMonth(m, -i); const st = monthStats(mm); ser.push({ m: mm, i: st.inc, e: st.exp }); }
+  const mx = Math.max(1, ...ser.map(x => Math.max(x.i, x.e)));
+  const W = 100, H = 46, step = W / 6;
+  const trend = ser.map((x, k) => {
+    const bx = k * step + step * .12, bw = step * .34;
+    const hi = x.i / mx * H, he = x.e / mx * H;
+    return `<rect x="${bx.toFixed(2)}" y="${(H - hi).toFixed(2)}" width="${bw.toFixed(2)}" height="${hi.toFixed(2)}" rx=".8" fill="var(--turq)"/>
+            <rect x="${(bx + bw + step * .06).toFixed(2)}" y="${(H - he).toFixed(2)}" width="${bw.toFixed(2)}" height="${he.toFixed(2)}" rx=".8" fill="var(--pom)"/>`;
+  }).join("");
+
+  const sr = s.inc > 0 ? (s.inc - s.exp) / s.inc : 0;
+  const dm = daysInMonth(m);
+  const avgDay = s.exp / dm;
+  const avgChk = s.n ? s.exp / s.n : 0;
+  const ae = avgExpense(3);
+  const months = ae > 0 ? totalBase() / ae : 0;
+  const dots = Array.from({ length: 12 }, (_, i) =>
+    `<i class="${months >= i + 1 ? "on" : months > i ? "half" : ""}"></i>`).join("");
+
+  const top = S.tx.filter(t => ym(t.date) === m && t.kind === "expense")
+    .sort((a, b) => toBase(b) - toBase(a)).slice(0, 5);
+
+  return `
+  <div class="grid2">
+    <div class="card tight"><div class="eyebrow">Норма сбережений</div>
+      <div class="num mid ${sr >= .2 ? "tq" : sr >= 0 ? "sf" : "pm"}">${(sr * 100).toFixed(0)}%</div>
+      <div class="hint">ориентир — от 20%</div></div>
+    <div class="card tight"><div class="eyebrow">Обязательные</div>
+      <div class="num mid">${s.exp ? (s.fixed / s.exp * 100).toFixed(0) : 0}%</div>
+      <div class="hint">${fmtShort(s.fixed)} из ${fmtShort(s.exp)}</div></div>
+    <div class="card tight"><div class="eyebrow">В день</div>
+      <div class="num mid">${fmtShort(avgDay)}</div></div>
+    <div class="card tight"><div class="eyebrow">Средняя трата</div>
+      <div class="num mid">${fmtShort(avgChk)}</div>
+      <div class="hint">${s.n} ${plural(s.n, "операция", "операции", "операций")}</div></div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Месяцев свободы</div>
+    <div class="row"><div class="num big">${months.toFixed(1)}</div>
+      <div class="hint" style="margin:0">накопления ${fmtShort(totalBase())}<br>делённые на средний расход ${fmtShort(ae)}</div></div>
+    <div class="dots">${dots}</div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Доход и расход, 6 месяцев</div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:74px;display:block">${trend}</svg>
+    <div class="pulse-legend">${ser.map(x => `<span>${MONTHS_SHORT[+x.m.slice(5, 7) - 1]}</span>`).join("")}</div>
+    <div class="row" style="margin-top:8px;font-size:11.5px;color:var(--dim)">
+      <span class="tq">■</span> доход <span class="pm" style="margin-left:8px">■</span> расход</div>
+  </div>
+
+  <div class="card"><div class="eyebrow">Структура расходов</div>${rows || `<div class="empty">Расходов нет.</div>`}</div>
+
+  ${top.length ? `<div class="card"><div class="eyebrow">Крупнейшие траты месяца</div>${top.map(txRow).join("")}</div>` : ""}`;
+}
+
+/* ---------------- Цели ---------------- */
+function viewGoals() {
+  $("top").innerHTML = header("Цели", "накопления", true);
+  const active = S.goals.filter(g => !g.done), done = S.goals.filter(g => g.done);
+  const ae = avgExpense(3);
+  const pace = paceMonthly();
+
+  const cardOf = g => {
+    const sv = goalSaved(g), tg = goalTargetBase(g), p = tg > 0 ? Math.min(1, sv / tg) : 0;
+    const rest = Math.max(0, tg - sv);
+    let eta = "—";
+    if (rest <= 0) eta = "цель закрыта";
+    else if (pace > 0) {
+      const k = Math.ceil(rest / pace);
+      const d = new Date(); d.setMonth(d.getMonth() + k);
+      eta = `≈ ${k} ${plural(k, "месяц", "месяца", "месяцев")} · ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+    }
+    let need = "";
+    if (g.deadline && rest > 0) {
+      const dl = new Date(g.deadline), now = new Date();
+      const k = Math.max(1, Math.round((dl - now) / 2629800000));
+      need = `Чтобы успеть к ${g.deadline}: ${fmtShort(rest / k)} в месяц`;
+    }
+    return `<div class="card">
+      <div class="between"><b style="font-size:16px">${esc(g.name)}</b>
+        <button class="badge" data-act="goal-edit" data-id="${g.id}">изменить</button></div>
+      <div class="row" style="margin:10px 0 8px;align-items:baseline">
+        <div class="num mid sf">${fmt(g.cur === "USD" ? sv / rate() : sv, g.cur)}</div>
+        <div class="dim" style="font-size:13px">из ${fmt(g.target, g.cur)}</div>
+      </div>
+      <div class="bar gold"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
+      <div class="between" style="margin-top:7px">
+        <span class="dim" style="font-size:12px">${Math.round(p * 100)}% · осталось ${fmtShort(rest)}</span>
+        <span class="dim num" style="font-size:12px">${eta}</span></div>
+      ${need ? `<div class="hint">${esc(need)}</div>` : ""}
+      <button class="btn sm" data-act="add" data-kind="goal" data-goal="${g.id}" style="margin-top:11px">Пополнить</button>
+    </div>`;
+  };
+
+  return `
+  <div class="card">
+    <div class="eyebrow">Подушка безопасности</div>
+    ${safetyBlock(ae, pace)}
+  </div>
+  ${active.map(cardOf).join("") || `<div class="card"><div class="empty">Целей пока нет. Добавь первую — квартира, машина, резерв, отпуск.</div></div>`}
+  <button class="btn ghost" data-act="goal-new">Новая цель</button>
+  ${done.length ? `<div class="card" style="margin-top:10px"><div class="eyebrow">Закрытые</div>${done.map(g =>
+      `<div class="li"><div class="ic">✓</div><div class="t"><b>${esc(g.name)}</b><span>${fmt(g.target, g.cur)}</span></div>
+       <button class="badge" data-act="goal-edit" data-id="${g.id}">···</button></div>`).join("")}</div>` : ""}`;
+}
+/** Средний темп сбережений в месяц (базовая валюта) за 3 завершённых месяца */
+function paceMonthly() {
+  const cur = ym(todayStr());
+  let s = 0, k = 0;
+  for (let i = 1; i <= 3; i++) {
+    const st = monthStats(shiftMonth(cur, -i));
+    if (st.inc || st.exp) { s += (st.inc - st.exp); k++; }
+  }
+  if (!k) { const st = monthStats(cur); return Math.max(0, st.inc - st.exp); }
+  return Math.max(0, s / k);
+}
+function safetyBlock(ae, pace) {
+  const need = ae * (+S.settings.safety || 6);
+  const have = totalBase();
+  const p = need > 0 ? Math.min(1, have / need) : 0;
+  const rest = Math.max(0, need - have);
+  let eta = "—";
+  if (rest <= 0) eta = "собрана";
+  else if (pace > 0) {
+    const k = Math.ceil(rest / pace); const d = new Date(); d.setMonth(d.getMonth() + k);
+    eta = `≈ ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  return `<div class="row" style="align-items:baseline"><div class="num big">${Math.round(p * 100)}%</div>
+      <div class="hint" style="margin:0">${fmtShort(have)} из ${fmtShort(need)}<br>${S.settings.safety} ${plural(S.settings.safety, "месяц", "месяца", "месяцев")} × ${fmtShort(ae)}</div></div>
+    <div class="bar" style="margin-top:10px"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
+    <div class="between" style="margin-top:7px"><span class="dim" style="font-size:12px">темп ${fmtShort(pace)} в месяц</span>
+      <span class="dim num" style="font-size:12px">${eta}</span></div>`;
+}
+
+/* ---------------- Доход ---------------- */
+function viewIncome() {
+  $("top").innerHTML = header("Доход", "рост и мотивация", true);
+  const cur = ym(todayStr());
+  const s = monthStats(cur);
+  const target = +S.settings.incomeTarget || 0;
+  const ser = incomeSeries(12);
+  const past = ser.slice(0, 11).filter(x => x.v > 0);
+  const record = Math.max(0, ...ser.map(x => x.v));
+  const recMonth = ser.find(x => x.v === record);
+  const avg3 = (() => { let a = 0, k = 0; for (let i = 1; i <= 3; i++) { const v = monthStats(shiftMonth(cur, -i)).inc; if (v > 0) { a += v; k++; } } return k ? a / k : s.inc; })();
+  const dm = daysInMonth(cur), day = new Date().getDate(), daysLeft = Math.max(1, dm - day + 1);
+  const gap = Math.max(0, target - s.inc);
+  const hourly = (+S.settings.hours || 176) > 0 ? avg3 / (+S.settings.hours || 176) : 0;
+
+  /* серия растущих месяцев */
+  let streak = 0;
+  for (let i = 1; i < ser.length - 1; i++) {
+    const a = ser[ser.length - 1 - i], b = ser[ser.length - 2 - i];
+    if (a.v > 0 && b.v > 0 && a.v >= b.v) streak++; else break;
+  }
+
+  /* лестница уровней — считается от твоей цели, не от абстрактных сумм */
+  const LV = [["Старт", .5], ["База", .75], ["Цель", 1], ["Рост", 1.25], ["Прорыв", 1.5]];
+  const reached = target > 0 ? LV.filter(l => avg3 >= target * l[1]).length : 0;
+  const next = target > 0 && reached < LV.length ? LV[reached] : null;
+
+  /* спарклайн 12 мес */
+  const mx = Math.max(1, ...ser.map(x => x.v));
+  const W = 100, H = 40, st = W / 12;
+  const spark = ser.map((x, k) => {
+    const h = x.v / mx * H;
+    const isRec = x.v === record && record > 0;
+    return `<rect x="${(k * st + st * .18).toFixed(2)}" y="${(H - h).toFixed(2)}" width="${(st * .64).toFixed(2)}" height="${Math.max(h, .8).toFixed(2)}" rx=".8" fill="${isRec ? "var(--saffron)" : "var(--turq)"}" opacity="${x.v ? 1 : .25}"/>`;
+  }).join("") + (target > 0 && target / mx <= 1 ? `<line x1="0" x2="${W}" y1="${(H - target / mx * H).toFixed(2)}" y2="${(H - target / mx * H).toFixed(2)}" stroke="var(--saffron)" stroke-width=".5" stroke-dasharray="2 2"/>` : "");
+
+  return `
+  ${target > 0 ? `<div class="card">
+    <div class="between"><div class="eyebrow" style="margin:0">Цель месяца</div><span class="badge">${Math.round(s.inc / target * 100)}%</span></div>
+    <div class="row" style="margin:8px 0 10px;align-items:baseline">
+      <div class="num big ${s.inc >= target ? "tq" : "sf"}">${fmtShort(s.inc)}</div>
+      <div class="dim" style="font-size:13px">из ${fmtShort(target)}</div></div>
+    <div class="bar ${s.inc >= target ? "" : "gold"}"><i style="width:${Math.min(100, s.inc / target * 100).toFixed(1)}%"></i></div>
+    ${gap > 0 ? `<div class="between" style="margin-top:9px">
+        <span class="dim" style="font-size:12.5px">Не хватает ${fmtShort(gap)}</span>
+        <span class="num sf" style="font-size:13px">${fmtShort(gap / daysLeft)} в день</span></div>
+      <div class="hint">осталось ${daysLeft} ${plural(daysLeft, "день", "дня", "дней")} до конца месяца</div>`
+      : `<div class="hint tq" style="margin-top:9px">Цель закрыта. Сверх плана: ${fmtShort(s.inc - target)}</div>`}
+  </div>` : `<div class="card"><div class="eyebrow">Цель по доходу не задана</div>
+    <div class="hint">Поставь месячную цель — появится разрыв в сумме на день, лестница уровней и серия роста.</div>
+    <button class="btn ghost sm" data-act="settings" style="margin-top:10px">Задать цель</button></div>`}
+
+  <div class="grid2">
+    <div class="card tight"><div class="eyebrow">Личный рекорд</div>
+      <div class="num mid sf">${fmtShort(record)}</div>
+      <div class="hint">${recMonth && record > 0 ? monthName(recMonth.m) : "—"}</div></div>
+    <div class="card tight"><div class="eyebrow">Средний за 3 мес</div>
+      <div class="num mid">${fmtShort(avg3)}</div>
+      <div class="hint">${record > 0 && avg3 < record ? "до рекорда " + fmtShort(record - avg3) : "на уровне рекорда"}</div></div>
+    <div class="card tight"><div class="eyebrow">Цена часа</div>
+      <div class="num mid">${fmtShort(hourly)}</div>
+      <div class="hint">при ${S.settings.hours} ч в месяц</div></div>
+    <div class="card tight"><div class="eyebrow">Серия роста</div>
+      <div class="num mid ${streak > 0 ? "tq" : ""}">${streak}</div>
+      <div class="hint">${plural(streak, "месяц подряд", "месяца подряд", "месяцев подряд")} без падения</div></div>
+  </div>
+
+  ${target > 0 ? `<div class="card">
+    <div class="eyebrow">Лестница уровней</div>
+    <div class="lvl">${LV.map((l, i) => `<i class="${i < reached ? "on" : ""}"></i>`).join("")}</div>
+    <div class="pulse-legend" style="margin-top:6px">${LV.map(l => `<span>${l[0]}</span>`).join("")}</div>
+    <div class="hint" style="margin-top:8px">${reached ? `Текущий уровень — <b>${LV[reached - 1][0]}</b>. ` : "Пока ниже первого уровня. "}${next ? `Следующий — <b>${next[0]}</b> при среднем доходе ${fmtShort(target * next[1])} в месяц, это ещё +${fmtShort(target * next[1] - avg3)}.` : "Верхний уровень взят."}</div>
+  </div>` : ""}
+
+  <div class="card">
+    <div class="eyebrow">Доход по месяцам, 12 месяцев</div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:70px;display:block">${spark}</svg>
+    <div class="pulse-legend">${ser.filter((_, i) => i % 2 === 0).map(x => `<span>${MONTHS_SHORT[+x.m.slice(5, 7) - 1]}</span>`).join("")}</div>
+    ${past.length >= 2 ? (() => {
+      const first = past[0].v, last = past[past.length - 1].v;
+      const g = first > 0 ? (last / first - 1) * 100 : 0;
+      return `<div class="hint" style="margin-top:8px">За период доход ${g >= 0 ? "вырос" : "снизился"} на <b class="${g >= 0 ? "tq" : "pm"}">${Math.abs(g).toFixed(0)}%</b> — с ${fmtShort(first)} до ${fmtShort(last)}.</div>`;
+    })() : ""}
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Что двигает результат</div>
+    <div class="hint" style="font-size:12.5px;line-height:1.55">
+      Каждый лишний ${fmtShort(1e6)} дохода при текущей норме сбережений ${s.inc > 0 ? Math.round((s.inc - s.exp) / s.inc * 100) : 0}% превращается примерно в ${fmtShort(s.inc > 0 ? 1e6 * (s.inc - s.exp) / s.inc : 0)} накоплений.<br>
+      Сокращение расходов на 10% (${fmtShort(s.exp * .1)}) даёт тот же эффект, что рост дохода на ${fmtShort(s.inc > 0 ? s.exp * .1 / Math.max(.01, (s.inc - s.exp) / s.inc) : 0)}.
+    </div>
+  </div>`;
+}
+
+/* ---------------- Настройки ---------------- */
+function viewSettings() {
+  $("top").innerHTML = `<button class="icon-btn" data-act="tab" data-tab="home" aria-label="Назад">‹</button>
+    <h1>Настройки<div class="sub">хранение: ${store.mode}</div></h1>`;
+  return `
+  <div class="card">
+    <div class="eyebrow">Основное</div>
+    <label class="f">Курс доллара, сум за $1</label>
+    <input class="inp" type="number" inputmode="numeric" data-set="rate" value="${S.settings.rate}">
+    <label class="f">Цель по доходу в месяц, сум</label>
+    <input class="inp" type="number" inputmode="numeric" data-set="incomeTarget" value="${S.settings.incomeTarget}">
+    <label class="f">Рабочих часов в месяц</label>
+    <input class="inp" type="number" inputmode="numeric" data-set="hours" value="${S.settings.hours}">
+    <label class="f">Подушка безопасности, месяцев расходов</label>
+    <input class="inp" type="number" inputmode="numeric" data-set="safety" value="${S.settings.safety}">
+  </div>
+
+  <div class="card">
+    <div class="between"><div class="eyebrow" style="margin:0">Счета</div>
+      <button class="badge" data-act="acc-new">добавить</button></div>
+    ${S.accounts.map(a => `<div class="li">
+      <div class="ic">${a.icon || "•"}</div>
+      <div class="t"><b>${esc(a.name)}</b><span>${a.cur} · начальный остаток ${fmt(a.opening, a.cur)}</span></div>
+      <button class="badge" data-act="acc-edit" data-id="${a.id}">···</button></div>`).join("")}
+  </div>
+
+  <div class="card">
+    <div class="between"><div class="eyebrow" style="margin:0">Категории расходов и бюджет</div>
+      <button class="badge" data-act="cat-new" data-kind="expense">добавить</button></div>
+    ${S.cats.filter(c => c.kind === "expense").map(c => `<div class="li">
+      <div class="ic">${c.icon || "•"}</div>
+      <div class="t"><b>${esc(c.name)}${c.fixed ? ` <span class="badge">обяз.</span>` : ""}</b>
+        <span>${+c.budget ? "лимит " + fmtShort(c.budget) + " в месяц" : "лимит не задан"}</span></div>
+      <button class="badge" data-act="cat-edit" data-id="${c.id}">···</button></div>`).join("")}
+    <div class="between" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
+      <span class="dim" style="font-size:12.5px">Всего лимитов</span>
+      <span class="num" style="font-weight:700">${fmtShort(budgetTotal())}</span></div>
+  </div>
+
+  <div class="card">
+    <div class="between"><div class="eyebrow" style="margin:0">Категории доходов</div>
+      <button class="badge" data-act="cat-new" data-kind="income">добавить</button></div>
+    ${S.cats.filter(c => c.kind === "income").map(c => `<div class="li">
+      <div class="ic">${c.icon || "•"}</div><div class="t"><b>${esc(c.name)}</b></div>
+      <button class="badge" data-act="cat-edit" data-id="${c.id}">···</button></div>`).join("")}
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Синхронизация с Google Sheets</div>
+    <label class="f">Адрес веб-приложения</label>
+    <input class="inp" data-set-s="url" value="${esc(S.sync.url)}" placeholder="https://script.google.com/macros/s/…/exec">
+    <label class="f">Токен</label>
+    <input class="inp" data-set-s="token" value="${esc(S.sync.token)}" placeholder="из журнала setupSync()">
+    <button class="btn ghost sm" data-act="sync-now" style="margin-top:13px">Синхронизировать сейчас</button>
+    <div class="between" style="margin-top:11px"><span class="dim" style="font-size:12.5px">Состояние</span>
+      <span class="badge" style="${S.sync.status === "err" ? "color:#F0918B" : S.sync.status === "ok" ? "color:var(--turq2)" : ""}">${
+        !SYNC.configured() ? "не настроена" : S.sync.status === "ok" ? "работает" : S.sync.status === "err" ? "ошибка" : "не запускалась"}</span></div>
+    <div class="between" style="margin-top:6px"><span class="dim" style="font-size:12.5px">Последний обмен</span>
+      <span class="badge">${S.sync.at ? new Date(S.sync.at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</span></div>
+    ${S.sync.err ? `<div class="hint pm">${esc(S.sync.err)}</div>` : ""}
+    <div class="hint">Данные лежат в твоей Google-таблице. Устройства сверяются автоматически при запуске, возврате в приложение и через несколько секунд после правок.</div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Данные</div>
+    <div class="grid2">
+      <button class="btn ghost sm" data-act="export-json">Бэкап JSON</button>
+      <button class="btn ghost sm" data-act="export-csv">Выгрузка CSV</button>
+    </div>
+    <label class="f">Восстановить из бэкапа</label>
+    <input class="inp" type="file" accept="application/json,.json" id="importFile">
+    <div class="hint">Всего операций: ${S.tx.length}. Файл заменит текущие данные целиком.</div>
+    <hr class="sep">
+    <div class="between"><span class="dim" style="font-size:12.5px">Где хранятся данные</span>
+      <span class="badge" style="${store.volatile ? "color:#F0918B" : ""}">${store.mode}</span></div>
+    <div class="between" style="margin-top:6px"><span class="dim" style="font-size:12.5px">Защита от очистки браузером</span>
+      <span class="badge">${store.persisted === true ? "включена" : store.persisted === false ? "отклонена" : "недоступна"}</span></div>
+    <div class="between" style="margin-top:6px"><span class="dim" style="font-size:12.5px">Последний бэкап</span>
+      <span class="badge">${S.settings.lastBackup ? S.settings.lastBackup.slice(0, 10) : "не было"}</span></div>
+    <button class="btn danger sm" data-act="wipe" style="margin-top:14px">Стереть все данные</button>
+  </div>`;
+}
+
+/* ==========================================================
+   Шторка ввода
+   ========================================================== */
+let draft = null;
+
+function openSheet(html) { $("sheetBody").innerHTML = html; $("sheet").hidden = false; }
+function closeSheet() { $("sheet").hidden = true; draft = null; }
+
+function newDraft(kind, preset) {
+  const firstAcc = S.accounts[0] || {};
+  const d = {
+    id: null, kind: kind || "expense", date: todayStr(), buf: "",
+    acc: firstAcc.id, acc2: (S.accounts[1] || firstAcc).id,
+    cat: (S.cats.find(c => c.kind === (kind === "income" ? "income" : "expense")) || {}).id,
+    goal: (S.goals.find(g => !g.done) || {}).id, note: ""
+  };
+  return Object.assign(d, preset || {});
+}
+function draftFromTx(t) {
+  return { id: t.id, kind: t.kind, date: t.date, buf: String(t.amount).replace(".", ","), acc: t.acc, acc2: t.acc2, cat: t.cat, goal: t.goal, note: t.note || "" };
+}
+const draftCur = () => (acc(draft.acc) || {}).cur || "UZS";
+const draftVal = () => { const v = parseFloat(String(draft.buf).replace(",", ".")); return isNaN(v) ? 0 : v; };
+
+function sheetEntry() {
+  const c = draftCur();
+  const shown = draft.buf === "" ? "0" : draft.buf;
+  const catList = S.cats.filter(x => x.kind === (draft.kind === "income" ? "income" : "expense"));
+  const KINDS = [["expense", "Расход"], ["income", "Доход"], ["transfer", "Перевод"], ["goal", "В цель"]];
+
+  openSheet(`
+    <div class="grab"></div>
+    <div class="seg" id="kseg">${KINDS.map(k => `<button data-k="${k[0]}" data-act="kind" class="${draft.kind === k[0] ? "on" : ""}">${k[1]}</button>`).join("")}</div>
+
+    <div class="amount">
+      <div class="v ${draft.kind === "income" ? "tq" : draft.kind === "goal" ? "sf" : draft.kind === "transfer" ? "lz" : ""}">${esc(shown)}<span style="font-size:20px;color:var(--dim)"> ${c === "USD" ? "$" : "сум"}</span></div>
+      <div class="c">${c === "USD" ? "по курсу " + nf0.format(rate()) + " = " + fmtShort(draftVal() * rate()) + " сум" : "&nbsp;"}</div>
+    </div>
+    <div class="pad">
+      ${[1,2,3,4,5,6,7,8,9].map(n => `<button data-act="key" data-k="${n}">${n}</button>`).join("")}
+      <button class="alt" data-act="key" data-k="${c === "USD" ? "," : "000"}">${c === "USD" ? "," : "000"}</button>
+      <button data-act="key" data-k="0">0</button>
+      <button class="alt" data-act="key" data-k="del">⌫</button>
+    </div>
+
+    ${draft.kind === "transfer" ? `
+      <label class="f">Откуда</label>
+      <select class="inp" data-set-d="acc">${S.accounts.map(a => `<option value="${a.id}" ${a.id === draft.acc ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
+      <label class="f">Куда</label>
+      <select class="inp" data-set-d="acc2">${S.accounts.map(a => `<option value="${a.id}" ${a.id === draft.acc2 ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
+      ${(acc(draft.acc) || {}).cur !== (acc(draft.acc2) || {}).cur ? `
+        <label class="f">Сколько зачислено (${(acc(draft.acc2) || {}).cur})</label>
+        <input class="inp" type="number" inputmode="decimal" data-set-d="amount2" value="${draft.amount2 != null ? draft.amount2 : ""}" placeholder="по курсу автоматически">` : ""}
+    ` : draft.kind === "goal" ? `
+      <label class="f">Цель</label>
+      <select class="inp" data-set-d="goal">${S.goals.filter(g => !g.done).map(g => `<option value="${g.id}" ${g.id === draft.goal ? "selected" : ""}>${esc(g.name)}</option>`).join("") || `<option value="">Сначала создай цель</option>`}</select>
+      <label class="f">Со счёта</label>
+      <select class="inp" data-set-d="acc">${S.accounts.map(a => `<option value="${a.id}" ${a.id === draft.acc ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
+    ` : `
+      <label class="f">Категория</label>
+      <div class="chips">${catList.map(x => `<button class="chip ${x.id === draft.cat ? "on" : ""}" data-act="cat" data-id="${x.id}">${x.icon} ${esc(x.name)}</button>`).join("")}</div>
+      <label class="f">Счёт</label>
+      <div class="chips">${S.accounts.map(a => `<button class="chip sm ${a.id === draft.acc ? "on" : ""}" data-act="acc" data-id="${a.id}">${a.icon} ${esc(a.name)}</button>`).join("")}</div>
+    `}
+
+    <label class="f">Дата</label>
+    <div class="row">
+      <button class="chip sm ${draft.date === todayStr() ? "on" : ""}" data-act="date-today">Сегодня</button>
+      <button class="chip sm ${draft.date === shiftDay(todayStr(), -1) ? "on" : ""}" data-act="date-yest">Вчера</button>
+      <input class="inp" type="date" style="flex:1" data-set-d="date" value="${draft.date}">
+    </div>
+
+    <label class="f">Комментарий</label>
+    <input class="inp" data-set-d="note" value="${esc(draft.note)}" placeholder="необязательно">
+
+    <div style="height:14px"></div>
+    <button class="btn" data-act="save-tx">${draft.id ? "Сохранить изменения" : "Записать"}</button>
+    <div class="grid2" style="margin-top:8px">
+      <button class="btn ghost sm" data-act="close">Отмена</button>
+      ${draft.id ? `<button class="btn danger sm" data-act="del-tx">Удалить</button>` : `<button class="btn ghost sm" data-act="close">Готово</button>`}
+    </div>
+  `);
+}
+function shiftDay(d, k) { const x = new Date(d); x.setDate(x.getDate() + k); return x.getFullYear() + "-" + pad2(x.getMonth() + 1) + "-" + pad2(x.getDate()); }
+
+function saveTx() {
+  const v = draftVal();
+  if (v <= 0) return toast("Введи сумму");
+  if (draft.kind === "goal" && !draft.goal) return toast("Сначала создай цель");
+  if (draft.kind === "transfer" && draft.acc === draft.acc2) return toast("Счета должны отличаться");
+  const c = draftCur();
+  const t = {
+    id: draft.id || uid(), kind: draft.kind, date: draft.date, amount: v, cur: c, rate: rate(),
+    acc: draft.acc, note: (draft.note || "").trim(), updatedAt: Date.now(), dirty: 1
+  };
+  if (draft.kind === "transfer") {
+    t.acc2 = draft.acc2;
+    const c2 = (acc(draft.acc2) || {}).cur;
+    if (c2 !== c) t.amount2 = draft.amount2 != null && draft.amount2 !== "" ? +draft.amount2 : (c === "USD" ? v * rate() : v / rate());
+    else t.amount2 = v;
+  } else if (draft.kind === "goal") t.goal = draft.goal;
+  else t.cat = draft.cat;
+
+  const isEdit = !!draft.id;
+  if (isEdit) { const i = S.tx.findIndex(x => x.id === draft.id); if (i >= 0) S.tx[i] = t; }
+  else S.tx.push(t);
+  closeSheet();
+  S.ui.month = ym(t.date);
+  save(); render();
+  toast(isEdit ? "Изменения сохранены" : "Записано");
+}
+
+/* ---------- Шторки справочников ---------- */
+function sheetGoal(id) {
+  const g = id ? goal(id) : { id: null, name: "", target: "", cur: "UZS", deadline: "", initial: 0, done: false };
+  openSheet(`<div class="grab"></div>
+    <div class="eyebrow">${id ? "Цель" : "Новая цель"}</div>
+    <label class="f">Название</label><input class="inp" id="g_name" value="${esc(g.name)}" placeholder="Резерв, машина, отпуск">
+    <label class="f">Сумма цели</label><input class="inp" id="g_target" type="number" inputmode="decimal" value="${g.target}">
+    <label class="f">Валюта цели</label>
+    <select class="inp" id="g_cur"><option value="UZS" ${g.cur === "UZS" ? "selected" : ""}>Сум</option><option value="USD" ${g.cur === "USD" ? "selected" : ""}>Доллар</option></select>
+    <label class="f">Уже отложено (не через приложение)</label><input class="inp" id="g_init" type="number" inputmode="decimal" value="${+g.initial || 0}">
+    <div class="hint">В сумах. Учтётся в прогрессе, но не в балансе счетов.</div>
+    <label class="f">Срок (необязательно)</label><input class="inp" id="g_dl" type="date" value="${g.deadline || ""}">
+    <label class="f"><input type="checkbox" id="g_done" ${g.done ? "checked" : ""}> Цель закрыта</label>
+    <div style="height:14px"></div>
+    <button class="btn" data-act="goal-save" data-id="${id || ""}">Сохранить</button>
+    <div class="grid2" style="margin-top:8px"><button class="btn ghost sm" data-act="close">Отмена</button>
+      ${id ? `<button class="btn danger sm" data-act="goal-del" data-id="${id}">Удалить</button>` : ""}</div>`);
+}
+function sheetAcc(id) {
+  const a = id ? acc(id) : { id: null, name: "", cur: "UZS", icon: "💳", opening: 0 };
+  openSheet(`<div class="grab"></div>
+    <div class="eyebrow">${id ? "Счёт" : "Новый счёт"}</div>
+    <label class="f">Название</label><input class="inp" id="a_name" value="${esc(a.name)}">
+    <label class="f">Значок</label><input class="inp" id="a_icon" value="${esc(a.icon)}" maxlength="2">
+    <label class="f">Валюта</label>
+    <select class="inp" id="a_cur"><option value="UZS" ${a.cur === "UZS" ? "selected" : ""}>Сум</option><option value="USD" ${a.cur === "USD" ? "selected" : ""}>Доллар</option></select>
+    <label class="f">Начальный остаток</label><input class="inp" id="a_open" type="number" inputmode="decimal" value="${+a.opening || 0}">
+    <div style="height:14px"></div>
+    <button class="btn" data-act="acc-save" data-id="${id || ""}">Сохранить</button>
+    <div class="grid2" style="margin-top:8px"><button class="btn ghost sm" data-act="close">Отмена</button>
+      ${id ? `<button class="btn danger sm" data-act="acc-del" data-id="${id}">Удалить</button>` : ""}</div>`);
+}
+function sheetCat(id, kind) {
+  const c = id ? cat(id) : { id: null, name: "", kind: kind || "expense", icon: "•", budget: 0, fixed: false };
+  openSheet(`<div class="grab"></div>
+    <div class="eyebrow">${id ? "Категория" : "Новая категория"}</div>
+    <label class="f">Название</label><input class="inp" id="c_name" value="${esc(c.name)}">
+    <label class="f">Значок</label><input class="inp" id="c_icon" value="${esc(c.icon)}" maxlength="2">
+    ${c.kind === "expense" ? `<label class="f">Лимит в месяц, сум</label><input class="inp" id="c_bud" type="number" inputmode="numeric" value="${+c.budget || 0}">
+    <label class="f"><input type="checkbox" id="c_fix" ${c.fixed ? "checked" : ""}> Обязательный платёж</label>
+    <div class="hint">Обязательные считаются отдельно — это твой минимальный уровень жизни.</div>` : ""}
+    <div style="height:14px"></div>
+    <button class="btn" data-act="cat-save" data-id="${id || ""}" data-kind="${c.kind}">Сохранить</button>
+    <div class="grid2" style="margin-top:8px"><button class="btn ghost sm" data-act="close">Отмена</button>
+      ${id ? `<button class="btn danger sm" data-act="cat-del" data-id="${id}">Удалить</button>` : ""}</div>`);
+}
+
+/* ==========================================================
+   Экспорт / импорт
+   ========================================================== */
+function download(name, text, type) {
+  const b = new Blob([text], { type: type || "application/json;charset=utf-8" });
+  const u = URL.createObjectURL(b), a = document.createElement("a");
+  a.href = u; a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(u); a.remove(); }, 500);
+}
+function exportCsv() {
+  const head = ["Дата", "Тип", "Категория", "Счёт", "Счёт 2", "Сумма", "Валюта", "Курс", "Сумма в сумах", "Комментарий"];
+  const KIND = { expense: "Расход", income: "Доход", transfer: "Перевод", goal: "В цель" };
+  const rows = S.tx.slice().sort((a, b) => a.date.localeCompare(b.date)).map(t => [
+    t.date, KIND[t.kind] || t.kind,
+    t.kind === "goal" ? ((goal(t.goal) || {}).name || "") : ((cat(t.cat) || {}).name || ""),
+    (acc(t.acc) || {}).name || "", (acc(t.acc2) || {}).name || "",
+    String(t.amount).replace(".", ","), t.cur, t.rate || "",
+    String(Math.round(toBase(t))), t.note || ""
+  ]);
+  const csv = "\uFEFF" + [head, ...rows].map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  download("finance_" + todayStr() + ".csv", csv, "text/csv;charset=utf-8");
+}
+
+/* ==========================================================
+   События
+   ========================================================== */
+let toastTimer = null;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 1700);
+}
+
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const a = el.dataset.act, id = el.dataset.id;
+
+  switch (a) {
+    case "tab": S.ui.tab = el.dataset.tab; save(); render(); break;
+    case "settings": S.ui.tab = "settings"; render(); break;
+    case "mprev": S.ui.month = shiftMonth(S.ui.month, -1); render(); break;
+    case "mnext": S.ui.month = shiftMonth(S.ui.month, 1); render(); break;
+    case "close": closeSheet(); break;
+
+    case "add": draft = newDraft(el.dataset.kind, el.dataset.goal ? { goal: el.dataset.goal } : null); sheetEntry(); break;
+    case "edit": { const t = S.tx.find(x => x.id === id); if (t) { draft = draftFromTx(t); sheetEntry(); } break; }
+    case "kind": draft.kind = el.dataset.k;
+      if (draft.kind !== "transfer" && draft.kind !== "goal") {
+        const c = cat(draft.cat);
+        if (!c || c.kind !== (draft.kind === "income" ? "income" : "expense"))
+          draft.cat = (S.cats.find(x => x.kind === (draft.kind === "income" ? "income" : "expense")) || {}).id;
+      }
+      sheetEntry(); break;
+    case "key": {
+      const k = el.dataset.k;
+      if (k === "del") draft.buf = draft.buf.slice(0, -1);
+      else if (k === ",") { if (draft.buf.indexOf(",") < 0) draft.buf = (draft.buf || "0") + ","; }
+      else if (draft.buf.indexOf(",") >= 0) { if (draft.buf.split(",")[1].length < 2) draft.buf += k; }
+      else if (draft.buf.replace(/\D/g, "").length < 12) draft.buf = (draft.buf === "0" ? "" : draft.buf) + k;
+      sheetEntry(); break;
+    }
+    case "cat": draft.cat = id; sheetEntry(); break;
+    case "acc": draft.acc = id; sheetEntry(); break;
+    case "date-today": draft.date = todayStr(); sheetEntry(); break;
+    case "date-yest": draft.date = shiftDay(todayStr(), -1); sheetEntry(); break;
+    case "save-tx": saveTx(); break;
+    case "del-tx": bury("tx", draft.id); S.tx = S.tx.filter(x => x.id !== draft.id);
+      save(); closeSheet(); render(); toast("Удалено"); break;
+
+    case "goal-new": sheetGoal(null); break;
+    case "goal-edit": sheetGoal(id); break;
+    case "goal-save": {
+      const g = {
+        id: id || uid(),
+        name: ($("g_name").value || "Цель").trim(),
+        target: +$("g_target").value || 0,
+        cur: $("g_cur").value,
+        initial: +$("g_init").value || 0,
+        deadline: $("g_dl").value || "",
+        done: $("g_done").checked,
+        updatedAt: Date.now(), dirty: 1
+      };
+      const i = S.goals.findIndex(x => x.id === g.id);
+      if (i >= 0) S.goals[i] = g; else S.goals.push(g);
+      save(); closeSheet(); render(); toast("Цель сохранена"); break;
+    }
+    case "goal-del":
+      if (S.tx.some(t => t.goal === id)) { toast("Есть взносы по этой цели"); break; }
+      bury("goal", id); S.goals = S.goals.filter(g => g.id !== id); save(); closeSheet(); render(); break;
+
+    case "acc-new": sheetAcc(null); break;
+    case "acc-edit": sheetAcc(id); break;
+    case "acc-save": {
+      const o = { id: id || uid(), name: ($("a_name").value || "Счёт").trim(), icon: $("a_icon").value || "•", cur: $("a_cur").value, opening: +$("a_open").value || 0, updatedAt: Date.now(), dirty: 1 };
+      const i = S.accounts.findIndex(x => x.id === o.id);
+      if (i >= 0) S.accounts[i] = o; else S.accounts.push(o);
+      save(); closeSheet(); render(); break;
+    }
+    case "acc-del":
+      if (S.tx.some(t => t.acc === id || t.acc2 === id)) { toast("По счёту есть операции") ; break; }
+      bury("account", id); S.accounts = S.accounts.filter(x => x.id !== id); save(); closeSheet(); render(); break;
+
+    case "cat-new": sheetCat(null, el.dataset.kind); break;
+    case "cat-edit": sheetCat(id); break;
+    case "cat-save": {
+      const kind = el.dataset.kind;
+      const o = {
+        id: id || uid(), name: ($("c_name").value || "Категория").trim(), icon: $("c_icon").value || "•", kind,
+        budget: kind === "expense" ? (+$("c_bud").value || 0) : 0,
+        fixed: kind === "expense" ? $("c_fix").checked : false,
+        updatedAt: Date.now(), dirty: 1
+      };
+      const i = S.cats.findIndex(x => x.id === o.id);
+      if (i >= 0) S.cats[i] = o; else S.cats.push(o);
+      save(); closeSheet(); render(); break;
+    }
+    case "cat-del":
+      if (S.tx.some(t => t.cat === id)) { toast("По категории есть операции"); break; }
+      bury("cat", id); S.cats = S.cats.filter(x => x.id !== id); save(); closeSheet(); render(); break;
+
+    case "sync-now":
+      toast("Синхронизация…");
+      SYNC.run().then(r => {
+        render();
+        toast(r.ok ? `Получено ${r.got}, отправлено ${r.sent}` : "Ошибка: " + r.msg);
+      });
+      break;
+    case "export-json":
+      S.settings.lastBackup = new Date().toISOString();
+      S.settings.updatedAt = Date.now(); S.settings.dirty = 1;
+      download("finance_backup_" + todayStr() + ".json", JSON.stringify(S, null, 2));
+      save(); render(); toast("Бэкап скачан"); break;
+    case "export-csv": exportCsv(); toast("CSV скачан"); break;
+    case "wipe":
+      if (confirm("Стереть все счета, категории, операции и цели? Действие необратимо.")) {
+        S = defaults(); store.save(S); render(); toast("Данные стёрты");
+      } break;
+  }
+});
+
+/* Поля настроек и полей шторки */
+document.addEventListener("change", e => {
+  const el = e.target;
+  if (el.dataset.setS) {
+    S.sync[el.dataset.setS] = (el.value || "").trim();
+    S.sync.status = ""; S.sync.err = ""; save(); render();
+    return;
+  }
+  if (el.dataset.set) {
+    S.settings[el.dataset.set] = +el.value || 0;
+    S.settings.updatedAt = Date.now(); S.settings.dirty = 1;
+    save();
+    if (el.dataset.set === "rate") toast("Курс обновлён");
+    return;
+  }
+  if (el.dataset.setD && draft) {
+    const k = el.dataset.setD;
+    draft[k] = k === "amount2" ? (el.value === "" ? null : +el.value) : el.value;
+    if (k === "acc" || k === "acc2") sheetEntry();
+    return;
+  }
+  if (el.id === "importFile" && el.files && el.files[0]) {
+    const fr = new FileReader();
+    fr.onload = () => {
+      try {
+        const o = JSON.parse(String(fr.result));
+        if (!o || !Array.isArray(o.tx) || !Array.isArray(o.accounts)) throw new Error("bad");
+        S = Object.assign(defaults(), o);
+        S.ui = S.ui || { tab: "home", month: ym(todayStr()) };
+        S.ui.tab = "home";
+        /* Восстановленное считаем неотправленным и тянем заново: бэкап мог быть снят
+           до подключения синхронизации либо разойтись с таблицей */
+        S.sync.lastSync = 0;
+        migrate();
+        store.save(S); render(); toast("Данные восстановлены");
+      } catch (err) { toast("Файл не читается"); }
+    };
+    fr.readAsText(el.files[0]);
+  }
+});
+document.addEventListener("input", e => {
+  if (e.target.dataset.setD && draft && e.target.dataset.setD === "note") draft.note = e.target.value;
+});
+$("fab").addEventListener("click", () => { draft = newDraft("expense"); sheetEntry(); });
+$("sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet(); });
+
+/* ==========================================================
+   Старт
+   ========================================================== */
+(async function init() {
+  /* Офлайн-режим: только на настоящем https-адресе (на file:// и content:// SW недоступен) */
+  try {
+    if (typeof navigator !== "undefined" && navigator.serviceWorker &&
+        typeof location !== "undefined" && location.protocol === "https:") {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  } catch (e) {}
+  await store.requestPersist();
+  const saved = await store.load();
+  if (saved && saved.accounts) {
+    S = Object.assign(defaults(), saved);
+    S.settings = Object.assign(defaults().settings, saved.settings || {});
+    S.ui = Object.assign({ tab: "home", month: ym(todayStr()) }, saved.ui || {});
+  }
+  migrate();
+  render();
+
+  /* Автосинхронизация: старт, возврат сети, возврат в приложение */
+  const pulse = () => SYNC.run().then(r => { if (r.ok && (r.got || r.sent)) render(); });
+  if (SYNC.configured()) pulse();
+  try {
+    if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("online", pulse);
+    if (typeof document !== "undefined" && document.addEventListener)
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) pulse(); });
+  } catch (e) {}
+})();
+
+/** Данные из старых версий: без меток изменения слияние работать не может */
+function migrate() {
+  const now = Date.now();
+  S.trash = S.trash || {};
+  /* старый формат надгробия — просто число */
+  Object.keys(S.trash).forEach(k => { if (typeof S.trash[k] === "number") S.trash[k] = { t: S.trash[k], d: 1 }; });
+  S.sync = Object.assign({ url: "", token: "", lastSync: 0, at: 0, status: "", err: "" }, S.sync || {});
+  const neverSynced = !Number(S.sync.lastSync);
+  [S.tx, S.accounts, S.cats, S.goals].forEach(arr => (arr || []).forEach(r => {
+    if (!r.updatedAt) r.updatedAt = now;
+    if (neverSynced) r.dirty = 1;   // ничего ещё не уезжало — отдать всё
+  }));
+  if (!S.settings.updatedAt) S.settings.updatedAt = now;
+  if (neverSynced) S.settings.dirty = 1;
+}
+</script>
+</body>
+</html>
