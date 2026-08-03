@@ -143,6 +143,13 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
   opacity:0;pointer-events:none;transition:opacity .18s}
 .toast.on{opacity:1}
 .empty{text-align:center;color:var(--dim);padding:26px 12px;font-size:13.5px}
+.syncing{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:70;
+  background:var(--ink3);border:1px solid var(--line);border-radius:20px;padding:5px 13px;
+  font-size:11.5px;color:var(--dim);display:flex;align-items:center;gap:7px;
+  box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.syncing[hidden]{display:none}
+.syncing i{width:7px;height:7px;border-radius:50%;background:var(--turq);animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
 .lvl{display:flex;gap:5px;margin-top:8px}
 .lvl i{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.08)}
 .lvl i.on{background:var(--saffron)}
@@ -165,6 +172,7 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 <button id="fab" aria-label="Добавить операцию">+</button>
 <nav class="tabs"><div class="in" id="tabs"></div></nav>
 <div class="sheet" id="sheet" hidden><div class="card2" id="sheetBody"></div></div>
+<div class="syncing" id="syncing" hidden><i></i>обмен с таблицей</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -306,9 +314,24 @@ function save() {
   /* Фоновая отправка: не во время активной синхронизации, иначе получится петля */
   if (S.sync && S.sync.url && !SYNC.busy) {
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(() => { SYNC.run().then(r => { if (r.ok && (r.got || r.sent)) render(); }); }, 4000);
+    syncTimer = setTimeout(() => { SYNC.run().then(r => { if (r.ok && (r.got || r.sent)) safeRender(); }); }, 4000);
   }
 }
+/** Индикатор идущего обмена — меняем точечно, без перерисовки экрана */
+function syncFlag(on) { const el = $("syncing"); if (el) el.hidden = !on; }
+
+/**
+ * Перерисовка для фоновых событий.
+ * Пока курсор стоит в поле ввода, экран не трогаем: перерисовка пересоздаёт поле
+ * и стирает набранное — на этом терялся наполовину введённый токен.
+ */
+function safeRender() {
+  const a = (typeof document !== "undefined") ? document.activeElement : null;
+  if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName || "")) return false;
+  render();
+  return true;
+}
+
 /** Метка изменения (для слияния) и флаг «ещё не отправлено» */
 const touch = o => { o.updatedAt = Date.now(); o.dirty = 1; return o; };
 /** Надгробие: простое удаление синхронизацию не переживает — запись вернулась бы с другого устройства */
@@ -535,7 +558,8 @@ const SYNC = {
     if (typeof navigator !== "undefined" && navigator.onLine === false)
       return Promise.resolve({ ok: false, skipped: true, msg: "нет сети" });
     this.busy = true;
-    this.pending = this.cycle().finally(() => { this.pending = null; this.busy = false; });
+    syncFlag(true);
+    this.pending = this.cycle().finally(() => { this.pending = null; this.busy = false; syncFlag(false); });
     return this.pending;
   },
 
@@ -572,7 +596,7 @@ const SYNC = {
       store.save(S);
       clearTimeout(retryTimer);
       retryTimer = setTimeout(() => {
-        this.run().then(r => { if (r.ok) render(); });
+        this.run().then(r => { if (r.ok) safeRender(); });
       }, Math.min(60000, 10000 * S.sync.fails));
       return { ok: false, msg: S.sync.err, fails: S.sync.fails };
     }
@@ -1470,7 +1494,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet()
   render();
 
   /* Автосинхронизация: старт, возврат сети, возврат в приложение */
-  const pulse = () => SYNC.run().then(r => { if (r.ok && (r.got || r.sent)) render(); });
+  const pulse = () => SYNC.run().then(r => { if (r.ok && (r.got || r.sent)) safeRender(); });
   if (SYNC.configured()) pulse();
   try {
     if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("online", pulse);
