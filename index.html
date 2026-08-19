@@ -266,7 +266,7 @@ function defaults() {
   const C = (name, kind, icon, fixed) => ({ id: uid(), name, kind, icon, fixed: !!fixed, budget: 0, updatedAt: ts, dirty: 1, seed: 1 });
   return {
     v: 1,
-    settings: { rate: 12800, incomeTarget: 0, hours: 176, safety: 6, start: todayStr(), updatedAt: ts, dirty: 1 },
+    settings: { rate: 12800, incomeTarget: 0, hours: 176, safety: 6, start: todayStr(), tax: 12, updatedAt: ts, dirty: 1 },
     accounts: [
       A("Наличные", "UZS", "💵"),
       A("Карта UZS", "UZS", "💳"),
@@ -361,7 +361,25 @@ function balances() {
 }
 function totalBase() {
   const b = balances();
-  return S.accounts.reduce((s, a) => s + (b[a.id] || 0) * (a.cur === "USD" ? rate() : 1), 0);
+  return S.accounts.reduce((s, a) => s + (b[a.id] || 0) * (a.cur === "USD" ? rate() : 1), 0) + goalPot();
+}
+
+/**
+ * Деньги, лежащие в незакрытых целях.
+ * Взносы списываются со счёта, поэтому без этой строки они пропадали
+ * из общей суммы. Начальное «уже отложено» сюда не входит: оно никогда
+ * не проходило через счета и учитывается только в прогрессе цели.
+ * Закрытая цель считается потраченной, её деньги из копилки уходят.
+ */
+function goalPot() {
+  const live = {};
+  S.goals.forEach(g => { if (!g.done) live[g.id] = 1; });
+  return S.tx.reduce((s, t) => s + (t.kind === "goal" && live[t.goal] ? toBase(t) : 0), 0);
+}
+
+/** Чистая сумма взносов по цели: пополнения минус возвраты */
+function goalNet(id) {
+  return S.tx.reduce((s, t) => s + (t.kind === "goal" && t.goal === id ? toBase(t) : 0), 0);
 }
 
 /* ---------- Статистика месяца ---------- */
@@ -393,11 +411,181 @@ function avgExpense(n) {
   if (!k) { const s = monthStats(cur); return s.exp; }
   return sum / k;
 }
+/**
+ * Опора для мотивационных расчётов — завершённые месяцы.
+ * Текущий месяц для этого не годится: третьего числа зарплата и аренда
+ * ещё не отражены, и любая производная от них величина бессмысленна.
+ */
+function baseline(n) {
+  const cur = ym(todayStr());
+  let inc = 0, exp = 0, k = 0;
+  for (let i = 1; i <= n; i++) {
+    const st = monthStats(shiftMonth(cur, -i));
+    /* Нужны обе стороны: месяц с зарплатой, но без единого расхода — это
+       обрывок ввода, а не месяц. Иначе «расход 0» уедет во все производные. */
+    if (st.inc > 0 && st.exp > 0) { inc += st.inc; exp += st.exp; k++; }
+  }
+  if (k) return { inc: inc / k, exp: exp / k, months: k, partial: false };
+  const st = monthStats(cur);
+  return { inc: st.inc, exp: st.exp, months: 0, partial: true };
+}
+
 function incomeSeries(n) {
   const cur = ym(todayStr()), out = [];
   for (let i = n - 1; i >= 0; i--) { const m = shiftMonth(cur, -i); out.push({ m, v: monthStats(m).inc }); }
   return out;
 }
+/** Дневной пульс месяца: медиана, дни без трат, серии */
+function dayStats(m) {
+  const s = monthStats(m), dm = daysInMonth(m);
+  const upto = m === ym(todayStr()) ? Math.min(dm, new Date().getDate()) : dm;
+  const vals = [];
+  let zero = 0, streak = 0, best = 0, run = 0;
+  for (let d = 1; d <= upto; d++) {
+    const v = s.byDay[m + "-" + pad2(d)] || 0;
+    if (v > 0) { vals.push(v); best = Math.max(best, run); run = 0; }
+    else { zero++; run++; }
+  }
+  best = Math.max(best, run);
+  for (let d = upto; d >= 1; d--) { if ((s.byDay[m + "-" + pad2(d)] || 0) > 0) break; streak++; }
+  /* Две медианы. По календарю (с нулями) — «сколько уходит в случайный день месяца»,
+     это опора для планирования. По активным дням — «сколько трачу, когда трачу».
+     Считать только вторую нельзя: дни без трат просто исчезают из выборки. */
+  const med = a => { const x = a.slice().sort((p, q) => p - q), k = x.length;
+    return !k ? 0 : (k % 2 ? x[(k - 1) / 2] : (x[k / 2 - 1] + x[k / 2]) / 2); };
+  const all = [];
+  for (let d = 1; d <= upto; d++) all.push(s.byDay[m + "-" + pad2(d)] || 0);
+  const n = vals.length, sum = vals.reduce((a, b) => a + b, 0);
+  return { days: upto, active: n, zero, streak, best,
+    median: med(all), medianActive: med(vals),
+    mean: upto ? sum / upto : 0, meanActive: n ? sum / n : 0,
+    max: n ? Math.max(...vals) : 0 };
+}
+
+/**
+ * Капитал на конец дня end. Считается ретроспективно из операций,
+ * снапшоты не нужны. Формула та же, что в totalBase: счета плюс копилка целей,
+ * поэтому последняя точка ряда всегда совпадает с «Всего на счетах».
+ */
+function capitalAt(end) {
+  const m = {}, live = {};
+  S.accounts.forEach(a => m[a.id] = +a.opening || 0);
+  S.goals.forEach(g => { if (!g.done) live[g.id] = 1; });
+  let pot = 0;
+  S.tx.forEach(t => {
+    if (t.date > end) return;
+    if (t.kind === "income") m[t.acc] = (m[t.acc] || 0) + t.amount;
+    else if (t.kind === "expense") m[t.acc] = (m[t.acc] || 0) - t.amount;
+    else if (t.kind === "goal") { m[t.acc] = (m[t.acc] || 0) - t.amount; if (live[t.goal]) pot += toBase(t); }
+    else if (t.kind === "transfer") {
+      m[t.acc] = (m[t.acc] || 0) - t.amount;
+      m[t.acc2] = (m[t.acc2] || 0) + (t.amount2 != null ? t.amount2 : t.amount);
+    }
+  });
+  return S.accounts.reduce((s, a) => s + (m[a.id] || 0) * (a.cur === "USD" ? rate() : 1), 0) + pot;
+}
+
+/** Расходы месяца по категориям: сумма, число операций, средний чек, медиана */
+function catStats(m) {
+  const by = {};
+  S.tx.forEach(t => {
+    if (t.kind !== "expense" || ym(t.date) !== m) return;
+    (by[t.cat] = by[t.cat] || []).push(toBase(t));
+  });
+  return Object.keys(by).map(id => {
+    const v = by[id].slice().sort((a, b) => a - b), n = v.length;
+    return { id, c: cat(id), sum: v.reduce((a, b) => a + b, 0), n,
+      avg: v.reduce((a, b) => a + b, 0) / n,
+      median: n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2 };
+  }).filter(x => x.c).sort((a, b) => b.sum - a.sum);
+}
+
+/**
+ * Регулярные платежи. Признак — повтор близкой суммы (±15%) в одной категории
+ * в разные месяцы. Одного месяца истории не хватает: тогда возвращаем пусто,
+ * и экран честно сообщает, что нужен второй месяц.
+ */
+function recurring() {
+  const byCat = {};
+  S.tx.forEach(t => {
+    if (t.kind !== "expense") return;
+    (byCat[t.cat] = byCat[t.cat] || []).push({ v: toBase(t), m: ym(t.date), date: t.date });
+  });
+  const out = [];
+  Object.keys(byCat).forEach(id => {
+    const c = cat(id); if (!c) return;
+    const items = byCat[id].slice().sort((a, b) => a.v - b.v);
+    const used = new Array(items.length).fill(false);
+    for (let i = 0; i < items.length; i++) {
+      if (used[i]) continue;
+      const group = [items[i]];
+      for (let j = i + 1; j < items.length; j++) {
+        if (used[j]) continue;
+        if (items[j].v <= group[0].v * 1.15) { group.push(items[j]); used[j] = true; }
+      }
+      const months = {}; group.forEach(g => months[g.m] = 1);
+      if (Object.keys(months).length >= 2) {
+        const sum = group.reduce((a, b) => a + b.v, 0);
+        out.push({ c, avg: sum / group.length, times: group.length,
+          months: Object.keys(months).length, last: group.map(g => g.date).sort().pop() });
+      }
+    }
+  });
+  return out.sort((a, b) => b.avg * b.months - a.avg * a.months);
+}
+
+/** Постоянные расходы: обязательные категории по среднему за завершённые месяцы */
+function fixedCosts() {
+  /* Берём месяцы, в которых обязательные траты реально были. Завершённые —
+     в приоритете; если их ещё нет, честно считаем по текущему и помечаем partial. */
+  const byMonth = {};
+  S.tx.forEach(t => {
+    if (t.kind !== "expense") return;
+    const c = cat(t.cat); if (!c || !c.fixed) return;
+    const m = ym(t.date);
+    (byMonth[m] = byMonth[m] || {})[c.id] = (byMonth[m][c.id] || 0) + toBase(t);
+  });
+  const all = Object.keys(byMonth).sort();
+  if (!all.length) return [];
+  const cur = ym(todayStr());
+  const done = all.filter(m => m !== cur);
+  const pick = done.length ? done.slice(-3) : [cur];
+  const acc = {};
+  pick.forEach(m => Object.keys(byMonth[m]).forEach(id => { acc[id] = (acc[id] || 0) + byMonth[m][id]; }));
+  return Object.keys(acc).map(id => ({ c: cat(id), perMonth: acc[id] / pick.length,
+    months: pick.length, partial: !done.length })).filter(x => x.c)
+    .sort((a, b) => b.perMonth - a.perMonth);
+}
+
+/** Рост категорий месяц к месяцу; текущий месяц приводится к полному */
+function catGrowth(m) {
+  const prev = shiftMonth(m, -1);
+  const a = {}, b = {};
+  catStats(prev).forEach(x => a[x.id] = x.sum);
+  catStats(m).forEach(x => b[x.id] = x.sum);
+  if (!Object.keys(a).length) return null;
+  const dm = daysInMonth(m);
+  const k = m === ym(todayStr()) ? dm / Math.max(1, Math.min(dm, new Date().getDate())) : 1;
+  const ids = Array.from(new Set(Object.keys(a).concat(Object.keys(b))));
+  return { k, rows: ids.map(id => {
+    const was = a[id] || 0, now = (b[id] || 0) * k;
+    return { c: cat(id), was, now, delta: now - was, pct: was > 0 ? (now / was - 1) * 100 : null };
+  }).filter(x => x.c && (x.was || x.now)).sort((x, y) => y.delta - x.delta) };
+}
+
+/** Доход по источникам за n месяцев, включая текущий */
+function incomeMix(n) {
+  const from = shiftMonth(ym(todayStr()), -(n - 1));
+  const by = {};
+  S.tx.forEach(t => {
+    if (t.kind !== "income" || ym(t.date) < from) return;
+    by[t.cat] = (by[t.cat] || 0) + toBase(t);
+  });
+  const rows = Object.keys(by).map(id => ({ c: cat(id), v: by[id] })).filter(x => x.c).sort((a, b) => b.v - a.v);
+  const total = rows.reduce((s, x) => s + x.v, 0);
+  return { rows, total };
+}
+
 function budgetTotal() { return S.cats.filter(c => c.kind === "expense").reduce((s, c) => s + (+c.budget || 0), 0); }
 function goalSaved(g) {
   return S.tx.filter(t => t.kind === "goal" && t.goal === g.id).reduce((s, t) => s + toBase(t), 0) + (+g.initial || 0);
@@ -669,7 +857,14 @@ function viewHome() {
   const forecast = dayNow > 0 ? s.exp / dayNow * dm : 0;
   const left = bud > 0 ? bud - s.exp : 0;
   const daysLeft = Math.max(1, dm - dayNow + (isCur ? 1 : 0));
-  const perDay = bud > 0 ? left / daysLeft : 0;
+  /* Резерв под ещё не списанные обязательные платежи.
+     Без него «можно тратить в день» завышен всю первую половину месяца:
+     остаток бюджета делится на дни, как будто аренда и садик уже оплачены.
+     Резерв = сумма невыбранных лимитов обязательных категорий. */
+  const upcomingFixed = bud > 0 ? S.cats.reduce((sum, c) =>
+    sum + (c.kind === "expense" && c.fixed && +c.budget > 0
+      ? Math.max(0, +c.budget - (s.byCat[c.id] || 0)) : 0), 0) : 0;
+  const perDay = bud > 0 ? (left - upcomingFixed) / daysLeft : 0;
   const bals = balances();
 
   $("top").innerHTML = monthNav("сводка");
@@ -677,6 +872,13 @@ function viewHome() {
   /* Пульс месяца — сигнатурная полоса */
   const maxDay = Math.max(1, ...Object.values(s.byDay));
   const dayBudget = bud > 0 ? bud / dm : maxDay * 0.6;
+  /* Корневая шкала: высота ~ √(сумма дня).
+     На линейной шкале месяц с арендой нечитаем: день 5 млн выше дня 200 тыс
+     в 25 раз, и все обычные дни сливаются в чёрточки у основания.
+     Корень сжимает разрыв до 5 раз — крупный день остаётся самым высоким,
+     но мелкие возвращаются в картинку. Цвета по-прежнему считаются
+     от исходных сумм, шкала на них не влияет. */
+  const yScale = v => Math.sqrt(Math.min(1, Math.max(0, v) / maxDay)) * (H - 8);
   const W = 100, H = 62, gap = 0.5;
   const bw = (W - gap * (dm - 1)) / dm;
   let bars = "";
@@ -685,7 +887,7 @@ function viewHome() {
   for (let d = 1; d <= dm; d++) {
     const key = m + "-" + pad2(d), v = s.byDay[key] || 0;
     const x = (d - 1) * (bw + gap);
-    const h = v > 0 ? Math.max(2, v / maxDay * (H - 8)) : 0;
+    const h = v > 0 ? Math.max(2, yScale(v)) : 0;
     const future = isCur && d > dayNow;
     const col = v === 0 ? "rgba(255,255,255,.06)" : (v > dayBudget * 1.6 ? "var(--pom)" : v > dayBudget ? "var(--saffron)" : "var(--turq)");
     if (h > 0) bars += `<rect class="d" x="${x.toFixed(2)}" y="${(H - h).toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}" rx="${Math.min(0.9, bw / 2).toFixed(2)}" fill="${col}" style="animation-delay:${d * 9}ms"/>`;
@@ -693,7 +895,8 @@ function viewHome() {
     if (incDays[d]) bars += `<rect x="${x.toFixed(2)}" y="0" width="${bw.toFixed(2)}" height="2.6" rx="1" fill="var(--saffron)"/>`;
   }
   if (bud > 0) {
-    const y = H - (dayBudget / maxDay * (H - 8));
+    /* Линия дневного лимита живёт в той же шкале, что и полосы */
+    const y = H - yScale(dayBudget);
     if (y > 2 && y < H) bars += `<line x1="0" x2="${W}" y1="${y.toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(255,255,255,.28)" stroke-width=".4" stroke-dasharray="1.5 1.5"/>`;
   }
 
@@ -712,7 +915,7 @@ function viewHome() {
   <div class="card">
     <div class="eyebrow">Пульс месяца</div>
     <svg class="pulse" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>
-    <div class="pulse-legend"><span>1</span><span>каждая полоса — день</span><span>${dm}</span></div>
+    <div class="pulse-legend"><span>1</span><span>полоса — день · высота — корень из суммы</span><span>${dm}</span></div>
   </div>
 
   <div class="card">
@@ -724,6 +927,10 @@ function viewHome() {
         <span class="dim" style="font-size:13px">${a.icon || "•"} ${esc(a.name)}</span>
         <span class="num" style="font-weight:600;font-size:14px">${fmt(bals[a.id] || 0, a.cur)}</span>
       </div>`).join("")}
+    ${goalPot() ? `<div class="between" style="padding:4px 0">
+        <span class="dim" style="font-size:13px">◎ Отложено в цели</span>
+        <span class="num sf" style="font-weight:600;font-size:14px">${fmt(goalPot(), "UZS")}</span>
+      </div>` : ""}
   </div>
 
   <div class="grid3">
@@ -740,7 +947,7 @@ function viewHome() {
       <span class="num" style="font-size:13px">прогноз ${fmtShort(forecast)}</span></div>
     ${isCur ? `<hr class="sep"><div class="between"><span class="dim" style="font-size:12.5px">Можно тратить в день</span>
       <span class="num mid ${perDay < 0 ? "pm" : "tq"}">${fmtShort(perDay)}</span></div>
-      <div class="hint">осталось ${daysLeft} ${plural(daysLeft, "день", "дня", "дней")}</div>` : ""}
+      <div class="hint">осталось ${daysLeft} ${plural(daysLeft, "день", "дня", "дней")}${upcomingFixed > 0 ? " · в резерве на обязательные " + fmtShort(upcomingFixed) : ""}</div>` : ""}
   </div>` : `<div class="card"><div class="eyebrow">Бюджет не задан</div>
     <div class="hint">Проставь месячные лимиты по категориям в настройках — появится дневной лимит и прогноз.</div>
     <button class="btn ghost sm" data-act="settings" style="margin-top:10px">Открыть настройки</button></div>`}
@@ -760,23 +967,28 @@ function txRow(t) {
   let icon = c ? c.icon : "•", title = c ? c.name : "Операция", sign = "−", cls = "";
   if (t.kind === "income") { sign = "+"; cls = "tq"; }
   else if (t.kind === "transfer") { icon = "⇄"; title = "Перевод"; sign = ""; cls = "lz"; }
-  else if (t.kind === "goal") { const g = goal(t.goal); icon = "◎"; title = g ? g.name : "В цель"; sign = "→"; cls = "sf"; }
+  else if (t.kind === "goal") {
+    const g = goal(t.goal); icon = "◎";
+    if (t.amount < 0) { title = "Возврат из «" + (g ? g.name : "цели") + "»"; sign = "←"; cls = "tq"; }
+    else { title = g ? g.name : "Цель удалена"; sign = "→"; cls = "sf"; }
+  }
   const sub = [t.date.slice(8, 10) + " " + MONTHS_SHORT[+t.date.slice(5, 7) - 1],
     t.kind === "transfer" ? (acc(t.acc) ? acc(t.acc).name : "") + " → " + (acc(t.acc2) ? acc(t.acc2).name : "") : (a ? a.name : ""),
     t.note].filter(Boolean).join(" · ");
   return `<div class="li" data-act="edit" data-id="${t.id}">
     <div class="ic">${icon}</div>
     <div class="t"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
-    <div class="v ${cls}">${sign}${nf0.format(Math.round(t.cur === "USD" ? t.amount : t.amount))}${t.cur === "USD" ? " $" : ""}</div>
+    <div class="v ${cls}">${sign}${nf0.format(Math.abs(Math.round(t.amount)))}${t.cur === "USD" ? " $" : ""}</div>
   </div>`;
 }
 function viewLog() {
   $("top").innerHTML = monthNav("журнал");
   const list = S.tx.filter(t => ym(t.date) === S.ui.month).sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
-  if (!list.length) return `<div class="card"><div class="empty">В этом месяце операций нет.</div></div>`;
+  if (!list.length) return `<div class="card"><div class="empty">В этом месяце операций нет.<br>Нажми «+», чтобы добавить.</div></div>`;
+  const tip = `<div class="hint" style="text-align:center;margin:0 0 8px">Нажми на операцию, чтобы изменить или удалить её.</div>`;
   const byDate = {};
   list.forEach(t => { (byDate[t.date] = byDate[t.date] || []).push(t); });
-  return Object.keys(byDate).sort().reverse().map(d => {
+  return tip + Object.keys(byDate).sort().reverse().map(d => {
     const day = byDate[d];
     const sum = day.reduce((s, t) => s + (t.kind === "expense" ? toBase(t) : 0), 0);
     const dd = new Date(d);
@@ -794,18 +1006,17 @@ function viewStat() {
   const m = S.ui.month, s = monthStats(m);
   if (!s.inc && !s.exp && !s.sav) return `<div class="card"><div class="empty">Нет данных за ${monthName(m)}.</div></div>`;
 
-  const cats = Object.keys(s.byCat).map(id => ({ c: cat(id), v: s.byCat[id] }))
-    .filter(x => x.c).sort((a, b) => b.v - a.v);
-  const maxC = Math.max(1, ...cats.map(x => x.v));
+  const cats = catStats(m);
+  const maxC = Math.max(1, ...cats.map(x => x.sum));
   const rows = cats.map(x => {
-    const bud = +x.c.budget || 0, over = bud > 0 && x.v > bud;
+    const bud = +x.c.budget || 0, over = bud > 0 && x.sum > bud;
     return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
       <div class="between"><span style="font-size:13.5px">${x.c.icon} ${esc(x.c.name)}${x.c.fixed ? ` <span class="badge">обяз.</span>` : ""}</span>
-        <span class="num" style="font-weight:700;font-size:13.5px">${fmtShort(x.v)}</span></div>
-      <div class="bar ${over ? "over" : ""}" style="margin-top:6px;height:6px"><i style="width:${(x.v / maxC * 100).toFixed(1)}%"></i></div>
+        <span class="num" style="font-weight:700;font-size:13.5px">${fmtShort(x.sum)}</span></div>
+      <div class="bar ${over ? "over" : ""}" style="margin-top:6px;height:6px"><i style="width:${(x.sum / maxC * 100).toFixed(1)}%"></i></div>
       <div class="between" style="margin-top:4px">
-        <span class="dim" style="font-size:11px">${(x.v / s.exp * 100).toFixed(1)}% расходов</span>
-        ${bud > 0 ? `<span class="dim num" style="font-size:11px">${over ? "перерасход " + fmtShort(x.v - bud) : "в лимите, остаток " + fmtShort(bud - x.v)}</span>` : ""}
+        <span class="dim num" style="font-size:11px">${x.n}× по ${fmtShort(x.median)}${x.avg / Math.max(1, x.median) >= 1.5 ? " (сред. " + fmtShort(x.avg) + ")" : ""}</span>
+        <span class="dim" style="font-size:11px">${(x.sum / s.exp * 100).toFixed(0)}%${bud > 0 ? (over ? " · перебор " + fmtShort(x.sum - bud) : " · остаток " + fmtShort(bud - x.sum)) : ""}</span>
       </div></div>`;
   }).join("");
 
@@ -823,8 +1034,7 @@ function viewStat() {
 
   const sr = s.inc > 0 ? (s.inc - s.exp) / s.inc : 0;
   const dm = daysInMonth(m);
-  const avgDay = s.exp / dm;
-  const avgChk = s.n ? s.exp / s.n : 0;
+  const DS = dayStats(m);
   const ae = avgExpense(3);
   const months = ae > 0 ? totalBase() / ae : 0;
   const dots = Array.from({ length: 12 }, (_, i) =>
@@ -841,12 +1051,18 @@ function viewStat() {
     <div class="card tight"><div class="eyebrow">Обязательные</div>
       <div class="num mid">${s.exp ? (s.fixed / s.exp * 100).toFixed(0) : 0}%</div>
       <div class="hint">${fmtShort(s.fixed)} из ${fmtShort(s.exp)}</div></div>
-    <div class="card tight"><div class="eyebrow">В день</div>
-      <div class="num mid">${fmtShort(avgDay)}</div></div>
-    <div class="card tight"><div class="eyebrow">Средняя трата</div>
-      <div class="num mid">${fmtShort(avgChk)}</div>
-      <div class="hint">${s.n} ${plural(s.n, "операция", "операции", "операций")}</div></div>
+    <div class="card tight"><div class="eyebrow">Типичный день</div>
+      <div class="num mid">${fmtShort(DS.median)}</div>
+      <div class="hint">медиана по календарю<br>когда трачу — ${fmtShort(DS.medianActive)}</div></div>
+    <div class="card tight"><div class="eyebrow">Дни без трат</div>
+      <div class="num mid ${DS.zero ? "tq" : ""}">${DS.zero}</div>
+      <div class="hint">из ${DS.days} · подряд сейчас ${DS.streak}, рекорд ${DS.best}</div></div>
   </div>
+
+  ${DS.median > 0 && DS.mean / DS.median >= 1.6 ? `<div class="card tight">
+    <div class="eyebrow">Почему средний день врёт</div>
+    <div class="hint">Средний день ${fmtShort(DS.mean)} — это ${(DS.mean / DS.median).toFixed(1)}× от типичного ${fmtShort(DS.median)}: несколько крупных платежей тянут его вверх. Самый большой день месяца — ${fmtShort(DS.max)}. Ориентируйся на медиану.</div>
+  </div>` : ""}
 
   <div class="card">
     <div class="eyebrow">Месяцев свободы</div>
@@ -864,6 +1080,82 @@ function viewStat() {
   </div>
 
   <div class="card"><div class="eyebrow">Структура расходов</div>${rows || `<div class="empty">Расходов нет.</div>`}</div>
+
+  ${(() => {   /* Рост категорий месяц к месяцу */
+    const G = catGrowth(m);
+    if (!G) return `<div class="card tight"><div class="eyebrow">Рост категорий</div>
+      <div class="hint">Нужен полный предыдущий месяц для сравнения. Появится, когда накопится второй месяц данных.</div></div>`;
+    const up = G.rows.filter(r => r.delta > 0).slice(0, 5);
+    const down = G.rows.filter(r => r.delta < 0).slice(-4).reverse();
+    const line = r => `<div class="between" style="padding:6px 0;border-bottom:1px solid var(--line)">
+        <span style="font-size:13px">${r.c.icon} ${esc(r.c.name)}</span>
+        <span class="num" style="font-size:12.5px;white-space:nowrap">
+          <span class="dim">${fmtShort(r.was)} → ${fmtShort(r.now)}</span>
+          <b class="${r.delta > 0 ? "pm" : "tq"}" style="margin-left:7px">${r.delta > 0 ? "+" : "−"}${r.pct == null ? fmtShort(Math.abs(r.delta)) : Math.abs(r.pct).toFixed(0) + "%"}</b></span>
+      </div>`;
+    return `<div class="card">
+      <div class="eyebrow">Рост категорий к прошлому месяцу</div>
+      ${G.k > 1.02 ? `<div class="hint" style="margin:0 0 6px">Текущий месяц приведён к полному (×${G.k.toFixed(2)}), иначе сравнение было бы не в пользу незакрытого месяца.</div>` : ""}
+      ${up.map(line).join("") || `<div class="hint">Растущих категорий нет.</div>`}
+      ${down.length ? `<div class="eyebrow" style="margin:12px 0 0">Снизились</div>${down.map(line).join("")}` : ""}
+    </div>`;
+  })()}
+
+  ${(() => {   /* Регулярные платежи и постоянные расходы */
+    const R = recurring(), F = fixedCosts();
+    const perMonth = F.reduce((a, b) => a + b.perMonth, 0);
+    const hourly = (+S.settings.hours || 176) > 0 ? baseline(3).inc / (+S.settings.hours || 176) : 0;
+    if (!R.length && !F.length) return "";
+    return `<div class="card">
+      <div class="eyebrow">Постоянные расходы</div>
+      ${F.length && F[0].partial ? `<div class="hint" style="margin:0 0 6px">Пока считаю по незакрытому месяцу — завершённых с расходами ещё нет.</div>` : ""}
+      ${F.map(x => `<div class="between" style="padding:6px 0;border-bottom:1px solid var(--line)">
+          <span style="font-size:13px">${x.c.icon} ${esc(x.c.name)}</span>
+          <span class="num" style="font-size:12.5px"><b>${fmtShort(x.perMonth)}</b><span class="dim"> в мес · ${fmtShort(x.perMonth * 12)} в год</span></span>
+        </div>`).join("")}
+      ${perMonth > 0 ? `<div class="between" style="margin-top:9px">
+        <span class="dim" style="font-size:12.5px">Итого обязательных</span>
+        <span class="num" style="font-weight:700">${fmtShort(perMonth)} / мес</span></div>
+        ${hourly > 0 ? `<div class="hint">Это ${Math.round(perMonth / hourly)} ${plural(Math.round(perMonth / hourly), "рабочий час", "рабочих часа", "рабочих часов")} каждый месяц при цене часа ${fmtShort(hourly)}.</div>` : ""}` : ""}
+      ${R.length ? `<div class="eyebrow" style="margin:13px 0 0">Найденные повторы</div>
+        ${R.slice(0, 6).map(r => `<div class="between" style="padding:6px 0;border-bottom:1px solid var(--line)">
+            <span style="font-size:13px">${r.c.icon} ${esc(r.c.name)}</span>
+            <span class="num" style="font-size:12.5px">${fmtShort(r.avg)}<span class="dim"> × ${r.times} за ${r.months} мес</span></span>
+          </div>`).join("")}`
+        : `<div class="hint" style="margin-top:10px">Повторы ищутся по совпадающим суммам в разных месяцах — нужен второй месяц истории.</div>`}
+    </div>`;
+  })()}
+
+  ${(() => {   /* График капитала */
+    const pts = [];
+    for (let i = 5; i >= 0; i--) {
+      const mm = shiftMonth(m, -i);
+      const last = mm + "-" + pad2(daysInMonth(mm));
+      pts.push({ m: mm, v: capitalAt(last > todayStr() ? todayStr() : last) });
+    }
+    if (!pts.some(p => p.v)) return "";
+    const lo = Math.min(0, ...pts.map(p => p.v)), hi = Math.max(1, ...pts.map(p => p.v));
+    const W = 100, H = 44, span = hi - lo || 1;
+    const xy = pts.map((p, i) => [i * (W / (pts.length - 1)), H - (p.v - lo) / span * H]);
+    const path = xy.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const area = path + ` L${W} ${H} L0 ${H} Z`;
+    const zeroY = H - (0 - lo) / span * H;
+    const first = pts.find(p => p.v), delta = pts[pts.length - 1].v - (first ? first.v : 0);
+    return `<div class="card">
+      <div class="eyebrow">Капитал по месяцам</div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
+        <path d="${area}" fill="rgba(47,191,176,.16)"/>
+        ${lo < 0 ? `<line x1="0" x2="${W}" y1="${zeroY.toFixed(1)}" y2="${zeroY.toFixed(1)}" stroke="rgba(255,255,255,.22)" stroke-width=".4" stroke-dasharray="1.5 1.5"/>` : ""}
+        <path d="${path}" fill="none" stroke="var(--turq)" stroke-width="1.1" stroke-linejoin="round"/>
+        ${xy.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="1.4" fill="${pts[i].v < 0 ? "var(--pom)" : "var(--turq2)"}"/>`).join("")}
+      </svg>
+      <div class="pulse-legend">${pts.map(p => `<span>${MONTHS_SHORT[+p.m.slice(5, 7) - 1]}</span>`).join("")}</div>
+      <div class="between" style="margin-top:8px">
+        <span class="dim" style="font-size:12.5px">Сейчас</span>
+        <span class="num mid ${pts[pts.length - 1].v < 0 ? "pm" : ""}">${fmtShort(pts[pts.length - 1].v)}</span></div>
+      ${delta ? `<div class="hint">За период ${delta >= 0 ? "прирост" : "убыль"} ${fmtShort(Math.abs(delta))}. Считается из операций: счета плюс отложенное в незакрытых целях.</div>` : ""}
+    </div>`;
+  })()}
 
   ${top.length ? `<div class="card"><div class="eyebrow">Крупнейшие траты месяца</div>${top.map(txRow).join("")}</div>` : ""}`;
 }
@@ -924,7 +1216,7 @@ function paceMonthly() {
   let s = 0, k = 0;
   for (let i = 1; i <= 3; i++) {
     const st = monthStats(shiftMonth(cur, -i));
-    if (st.inc || st.exp) { s += (st.inc - st.exp); k++; }
+    if (st.exp > 0) { s += (st.inc - st.exp); k++; }
   }
   if (!k) { const st = monthStats(cur); return Math.max(0, st.inc - st.exp); }
   return Math.max(0, s / k);
@@ -1021,6 +1313,32 @@ function viewIncome() {
     <div class="hint" style="margin-top:8px">${reached ? `Текущий уровень — <b>${LV[reached - 1][0]}</b>. ` : "Пока ниже первого уровня. "}${next ? `Следующий — <b>${next[0]}</b> при среднем доходе ${fmtShort(target * next[1])} в месяц, это ещё +${fmtShort(target * next[1] - avg3)}.` : "Верхний уровень взят."}</div>
   </div>` : ""}
 
+  ${(() => {   /* Структура дохода по источникам */
+    const M3 = incomeMix(3), M1 = incomeMix(1);
+    if (!M3.total) return "";
+    const top = M3.rows[0];
+    const conc = top ? top.v / M3.total * 100 : 0;
+    return `<div class="card">
+      <div class="eyebrow">Откуда приходят деньги, 3 месяца</div>
+      ${M3.rows.map(x => {
+        const share = x.v / M3.total * 100;
+        const nowV = (M1.rows.find(y => y.c.id === x.c.id) || {}).v || 0;
+        return `<div style="padding:7px 0;border-bottom:1px solid var(--line)">
+          <div class="between"><span style="font-size:13.5px">${x.c.icon} ${esc(x.c.name)}</span>
+            <span class="num" style="font-weight:700;font-size:13.5px">${fmtShort(x.v)}</span></div>
+          <div class="bar" style="margin-top:5px;height:6px"><i style="width:${share.toFixed(1)}%"></i></div>
+          <div class="between" style="margin-top:4px">
+            <span class="dim num" style="font-size:11px">${share.toFixed(0)}% дохода</span>
+            <span class="dim num" style="font-size:11px">${nowV ? "в этом месяце " + fmtShort(nowV) : "в этом месяце не было"}</span></div>
+        </div>`;
+      }).join("")}
+      <div class="hint" style="margin-top:9px">${conc >= 85
+        ? `Один источник даёт ${conc.toFixed(0)}% дохода. Любой сбой в нём обнуляет месяц целиком — второй источник важнее прибавки к первому.`
+        : conc >= 60 ? `Основной источник — ${conc.toFixed(0)}%. Диверсификация началась, но зависимость ещё высокая.`
+        : `Доход распределён между источниками, максимальная доля ${conc.toFixed(0)}%.`}</div>
+    </div>`;
+  })()}
+
   <div class="card">
     <div class="eyebrow">Доход по месяцам, 12 месяцев</div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:70px;display:block">${spark}</svg>
@@ -1032,13 +1350,34 @@ function viewIncome() {
     })() : ""}
   </div>
 
-  <div class="card">
-    <div class="eyebrow">Что двигает результат</div>
-    <div class="hint" style="font-size:12.5px;line-height:1.55">
-      Каждый лишний ${fmtShort(1e6)} дохода при текущей норме сбережений ${s.inc > 0 ? Math.round((s.inc - s.exp) / s.inc * 100) : 0}% превращается примерно в ${fmtShort(s.inc > 0 ? 1e6 * (s.inc - s.exp) / s.inc : 0)} накоплений.<br>
-      Сокращение расходов на 10% (${fmtShort(s.exp * .1)}) даёт тот же эффект, что рост дохода на ${fmtShort(s.inc > 0 ? s.exp * .1 / Math.max(.01, (s.inc - s.exp) / s.inc) : 0)}.
-    </div>
-  </div>`;
+  ${(() => {
+    /* Всё строится на тождестве: сбережения = доход − расход.
+       Ни средняя норма сбережений, ни деление на неё здесь не участвуют:
+       дополнительный доход при неизменных расходах оседает целиком. */
+    const B = baseline(3);
+    if (!B.inc && !B.exp) return "";
+    const gap = B.inc - B.exp;
+    const cut = B.exp * 0.1;
+    const tax = Math.min(90, Math.max(0, +S.settings.tax || 0)) / 100;
+    const gross = cut / (1 - tax);
+    const months = Math.max(1, +S.settings.safety || 6);
+    const row = (a, b) => `<div class="between" style="padding:7px 0;border-bottom:1px solid var(--line)">
+        <span style="font-size:12.5px;padding-right:10px">${a}</span>
+        <span class="num" style="font-weight:700;font-size:13.5px;white-space:nowrap">${b}</span></div>`;
+    return `<div class="card">
+      <div class="eyebrow">Что двигает результат</div>
+      <div class="hint" style="margin:0 0 8px">${B.partial
+        ? "Считаю по текущему месяцу — завершённых пока нет, цифры будут скакать."
+        : `Считаю по среднему за ${B.months} ${plural(B.months, "завершённый месяц", "завершённых месяца", "завершённых месяцев")}: доход ${fmtShort(B.inc)}, расход ${fmtShort(B.exp)}.`}</div>
+      ${row(gap >= 0 ? "Откладывается в месяц" : "Расходы превышают доходы на", `<span class="${gap >= 0 ? "tq" : "pm"}">${fmtShort(Math.abs(gap))}</span>`)}
+      ${row("Доход больше на 1 млн при тех же расходах", `<span class="tq">+${fmtShort(1e6)}</span> в месяц`)}
+      ${row("То же за год", `<span class="tq">+${fmtShort(12e6)}</span>`)}
+      ${row("Расходы меньше на 10%", `<span class="tq">+${fmtShort(cut)}</span> в месяц`)}
+      ${row("Столько же через оклад — грязными", `${fmtShort(gross)}`)}
+      ${row("Если урезана постоянная трата — цель по подушке падает на", `<span class="sf">${fmtShort(cut * months)}</span>`)}
+      <div class="hint" style="margin-top:9px">Сум сокращённого расхода и сум дополнительного чистого дохода дают одинаковый результат. Разница в том, что расход облагается налогом ${Math.round(tax * 100)}% только в виде дохода, постоянную трату режут один раз навсегда, и расходы зависят только от тебя.</div>
+    </div>`;
+  })()}`;
 }
 
 /* ---------------- Настройки ---------------- */
@@ -1056,6 +1395,9 @@ function viewSettings() {
     <input class="inp" type="number" inputmode="numeric" data-set="hours" value="${S.settings.hours}">
     <label class="f">Подушка безопасности, месяцев расходов</label>
     <input class="inp" type="number" inputmode="numeric" data-set="safety" value="${S.settings.safety}">
+    <label class="f">Налог на доход, %</label>
+    <input class="inp" type="number" inputmode="numeric" data-set="tax" value="${S.settings.tax}">
+    <div class="hint">Нужен для сравнения «сократить расход» против «заработать больше»: расход налогом не облагается.</div>
   </div>
 
   <div class="card">
@@ -1250,6 +1592,14 @@ function sheetGoal(id) {
     <div class="hint">В сумах. Учтётся в прогрессе, но не в балансе счетов.</div>
     <label class="f">Срок (необязательно)</label><input class="inp" id="g_dl" type="date" value="${g.deadline || ""}">
     <label class="f"><input type="checkbox" id="g_done" ${g.done ? "checked" : ""}> Цель закрыта</label>
+    <div class="hint">Закрытая цель считается потраченной: её деньги уходят из копилки. Если тратить не собираешься — сначала верни их на счёт.</div>
+    ${id && goalNet(id) > 0 ? `
+      <hr class="sep">
+      <div class="eyebrow">Вернуть деньги на счёт</div>
+      <div class="hint" style="margin:0 0 8px">В цели лежит ${fmtShort(goalNet(id))}. Возврат вернёт всю сумму на выбранный счёт.</div>
+      <select class="inp" id="g_back_acc">${S.accounts.map(a => `<option value="${a.id}">${esc(a.name)} (${a.cur})</option>`).join("")}</select>
+      <button class="btn ghost sm" data-act="goal-return" data-id="${id}" style="margin-top:9px">Вернуть на счёт</button>
+    ` : ""}
     <div style="height:14px"></div>
     <button class="btn" data-act="goal-save" data-id="${id || ""}">Сохранить</button>
     <div class="grid2" style="margin-top:8px"><button class="btn ghost sm" data-act="close">Отмена</button>
@@ -1370,9 +1720,27 @@ document.addEventListener("click", e => {
       if (i >= 0) S.goals[i] = g; else S.goals.push(g);
       save(); closeSheet(); render(); toast("Цель сохранена"); break;
     }
-    case "goal-del":
-      if (S.tx.some(t => t.goal === id)) { toast("Есть взносы по этой цели"); break; }
+    case "goal-return": {
+      const g = goal(id); if (!g) break;
+      const net = goalNet(id);
+      if (net <= 0) { toast("Возвращать нечего"); break; }
+      const accId = $("g_back_acc") ? $("g_back_acc").value : "";
+      const a = acc(accId);
+      if (!a) { toast("Выбери счёт"); break; }
+      /* Возврат — тот же взнос с обратным знаком: балансы, копилка и прогресс
+         пересчитываются сами, история при этом сохраняется целиком */
+      S.tx.push({
+        id: uid(), kind: "goal", date: todayStr(), cur: a.cur, rate: rate(),
+        amount: -(a.cur === "USD" ? net / rate() : net),
+        acc: accId, goal: id, note: "возврат из цели", updatedAt: Date.now(), dirty: 1
+      });
+      save(); closeSheet(); render(); toast("Возвращено " + fmtShort(net)); break;
+    }
+    case "goal-del": {
+      const net = goalNet(id);
+      if (net > 0) { toast("Сначала верни " + fmtShort(net) + " на счёт"); break; }
       bury("goal", id); S.goals = S.goals.filter(g => g.id !== id); save(); closeSheet(); render(); break;
+    }
 
     case "acc-new": sheetAcc(null); break;
     case "acc-edit": sheetAcc(id); break;
@@ -1515,6 +1883,10 @@ function migrate() {
     if (!r.updatedAt) r.updatedAt = now;
     if (neverSynced) r.dirty = 1;   // ничего ещё не уезжало — отдать всё
   }));
+  /* Поля, добавленные позже старта: у ранних пользователей их нет,
+     и в настройках рисуется value="undefined" */
+  const def = defaults().settings;
+  Object.keys(def).forEach(k => { if (S.settings[k] === undefined) S.settings[k] = def[k]; });
   if (!S.settings.updatedAt) S.settings.updatedAt = now;
   if (neverSynced) S.settings.dirty = 1;
 }
