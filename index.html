@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
-<meta name="theme-color" content="#0E1830">
+<meta name="theme-color" content="#0E1B3D">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -12,25 +12,29 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Финансы">
 <title>Финансы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 /* ================== Токены ================== */
+/* палитра — из дизайн-системы "Ponaehali Report Palette" */
 :root{
-  --ink:#0E1830;        /* ночной индиго — фон */
-  --ink2:#152340;       /* карточка */
-  --ink3:#1D3157;       /* поднятая поверхность */
+  --ink:#0E1B3D;         /* ink — фон */
+  --ink2:#152357;        /* navy-ramp 700 — карточка */
+  --ink3:#23316B;        /* navy-ramp 600 — поднятая поверхность */
   --line:rgba(255,255,255,.10);
-  --text:#E9EFF8;
-  --dim:#8DA0C0;
-  --turq:#2FBFB0;       /* тимуридская бирюза — доход, норма */
-  --turq2:#3FD9C6;
-  --saffron:#E9A93C;    /* шафран — цели, внимание */
-  --pom:#D6504A;        /* гранат — расход, перерасход */
-  --lapis:#4A7EE0;      /* лазурит — переводы */
+  --text:#F2E9D8;        /* cream — основной текст */
+  --dim:#8A8DA1;         /* navy-ramp 300 */
+  --turq:#3A8C5A;        /* pine — доход, норма (positive) */
+  --turq2:#6FB088;       /* pine, светлее */
+  --saffron:#C9A24E;     /* brass — цели, внимание (warning) */
+  --pom:#E8344A;         /* red — расход, перерасход (negative) */
+  --lapis:#2C6BB5;       /* cobalt — переводы */
   --r:16px;
   --pad:14px;
-  --fd:"PT Serif",Georgia,"Times New Roman",serif;               /* акцентная */
-  --fn:"Roboto Condensed","PT Sans Narrow","Arial Narrow",Tahoma,sans-serif; /* цифры */
-  --fb:"Segoe UI",Roboto,system-ui,-apple-system,Arial,sans-serif;/* интерфейс */
+  --fd:'Unbounded',sans-serif;                                    /* акцентная */
+  --fn:'JetBrains Mono',monospace;                                /* цифры */
+  --fb:'Inter',sans-serif;                                        /* интерфейс */
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;background:var(--ink);color:var(--text);font-family:var(--fb);font-size:15px;line-height:1.4}
@@ -42,7 +46,7 @@ button{border:0;background:none;cursor:pointer}
 #app{max-width:520px;margin:0 auto;padding:0 12px}
 
 /* ================== Шапка ================== */
-.top{display:flex;align-items:center;gap:10px;padding:16px 2px 10px;position:sticky;top:0;background:linear-gradient(var(--ink) 76%,rgba(14,24,48,0));z-index:20}
+.top{display:flex;align-items:center;gap:10px;padding:16px 2px 10px;position:sticky;top:0;background:linear-gradient(var(--ink) 76%,rgba(14,27,61,0));z-index:20}
 .top h1{font-family:var(--fd);font-size:21px;font-weight:700;margin:0;letter-spacing:.2px;flex:1}
 .top .sub{font-size:12px;color:var(--dim);font-weight:400;font-family:var(--fb)}
 .icon-btn{width:38px;height:38px;border-radius:12px;background:var(--ink2);display:grid;place-items:center;font-size:17px;border:1px solid var(--line)}
@@ -66,9 +70,9 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:10px 0}
 .bar{height:8px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden}
 .bar>i{display:block;height:100%;border-radius:6px;
   background:repeating-linear-gradient(115deg,var(--turq) 0 9px,var(--turq2) 9px 13px)}
-.bar.warn>i{background:repeating-linear-gradient(115deg,var(--saffron) 0 9px,#F5C46B 9px 13px)}
-.bar.over>i{background:repeating-linear-gradient(115deg,var(--pom) 0 9px,#E97A74 9px 13px)}
-.bar.gold>i{background:repeating-linear-gradient(115deg,var(--saffron) 0 9px,#FFD27A 9px 13px)}
+.bar.warn>i{background:repeating-linear-gradient(115deg,var(--saffron) 0 9px,#DCC38C 9px 13px)}
+.bar.over>i{background:repeating-linear-gradient(115deg,var(--pom) 0 9px,#F39A8E 9px 13px)}
+.bar.gold>i{background:repeating-linear-gradient(115deg,var(--saffron) 0 9px,#E6C27A 9px 13px)}
 
 /* ================== Пульс месяца (сигнатура) ================== */
 .pulse{width:100%;height:78px;display:block}
@@ -90,34 +94,34 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:10px 0}
 .seg{display:flex;background:var(--ink);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
 .seg button{flex:1;padding:9px 4px;border-radius:9px;font-size:13px;font-weight:600;color:var(--dim)}
 .seg button.on{background:var(--ink3);color:var(--text)}
-.seg button.on[data-k="expense"]{background:rgba(214,80,74,.22);color:#F0918B}
-.seg button.on[data-k="income"]{background:rgba(47,191,176,.2);color:var(--turq2)}
-.seg button.on[data-k="transfer"]{background:rgba(74,126,224,.2);color:#8FB4F5}
-.seg button.on[data-k="goal"]{background:rgba(233,169,60,.2);color:#F5C46B}
+.seg button.on[data-k="expense"]{background:rgba(232,52,74,.22);color:#EE6F70}
+.seg button.on[data-k="income"]{background:rgba(58,140,90,.2);color:var(--turq2)}
+.seg button.on[data-k="transfer"]{background:rgba(44,107,181,.2);color:#769FCF}
+.seg button.on[data-k="goal"]{background:rgba(201,162,78,.2);color:#DCC38C}
 .chips{display:flex;flex-wrap:wrap;gap:7px}
 .chip{padding:8px 11px;border-radius:11px;background:var(--ink3);border:1px solid transparent;font-size:13px;display:flex;gap:6px;align-items:center}
-.chip.on{border-color:var(--turq);background:rgba(47,191,176,.16)}
+.chip.on{border-color:var(--turq);background:rgba(58,140,90,.16)}
 .chip.sm{padding:6px 10px;font-size:12.5px}
 
 /* ================== Поля ================== */
 label.f{display:block;margin:12px 0 6px;font-size:11.5px;color:var(--dim);letter-spacing:.07em;text-transform:uppercase;font-weight:700}
 .inp{width:100%;padding:11px 12px;border-radius:12px;background:var(--ink);border:1px solid var(--line);color:var(--text)}
 select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%);background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
-.btn{display:block;width:100%;padding:14px;border-radius:13px;background:var(--turq);color:#06231F;font-weight:700;font-size:15px;text-align:center}
+.btn{display:block;width:100%;padding:14px;border-radius:13px;background:var(--turq);color:var(--text);font-weight:700;font-size:15px;text-align:center}
 .btn.ghost{background:var(--ink3);color:var(--text)}
-.btn.danger{background:rgba(214,80,74,.16);color:#F0918B}
+.btn.danger{background:rgba(232,52,74,.16);color:#EE6F70}
 .btn.sm{padding:9px;font-size:13.5px}
 
 /* ================== Навигация ================== */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;justify-content:center;
-  background:rgba(14,24,48,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  background:rgba(14,27,61,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);
   padding:6px 0 calc(6px + env(safe-area-inset-bottom))}
 .tabs .in{display:flex;width:100%;max-width:520px}
 .tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 0;color:var(--dim);font-size:10px;font-weight:600}
 .tabs button em{font-style:normal;font-size:18px;line-height:1}
 .tabs button.on{color:var(--turq2)}
 #fab{position:fixed;z-index:31;right:max(14px,calc(50% - 260px + 14px));bottom:calc(80px + env(safe-area-inset-bottom));
-  width:58px;height:58px;border-radius:20px;background:var(--saffron);color:#2A1A02;font-size:30px;font-weight:700;
+  width:58px;height:58px;border-radius:20px;background:var(--saffron);color:var(--ink);font-size:30px;font-weight:700;
   display:grid;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.45)}
 
 /* ================== Шторка ================== */
@@ -159,8 +163,8 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 .dots i.half{background:linear-gradient(90deg,var(--turq) 50%,rgba(255,255,255,.09) 50%)}
 .badge{font-size:10.5px;padding:3px 7px;border-radius:7px;background:var(--ink3);color:var(--dim);font-weight:700}
 .hint{font-size:12px;color:var(--dim);margin-top:6px}
-.card.alarm{border-color:rgba(214,80,74,.55);background:linear-gradient(var(--ink2),rgba(214,80,74,.10))}
-.card.warn-soft{border-color:rgba(233,169,60,.35);padding:10px 12px}
+.card.alarm{border-color:rgba(232,52,74,.55);background:linear-gradient(var(--ink2),rgba(232,52,74,.10))}
+.card.warn-soft{border-color:rgba(201,162,78,.35);padding:10px 12px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -815,7 +819,7 @@ function render() {
 function banner() {
   if (store.volatile || !store.lastOk) {
     return `<div class="card alarm">
-      <div class="eyebrow" style="color:#F0918B">Данные не сохраняются</div>
+      <div class="eyebrow" style="color:#EE6F70">Данные не сохраняются</div>
       <div class="hint" style="color:var(--text)">Страница открыта так, что браузер не даёт ей постоянное хранилище (обычно это <b>content://</b> или повторно скачанный файл). Всё, что введено, исчезнет при закрытии вкладки.</div>
       <button class="btn danger sm" data-act="export-json" style="margin-top:11px">Скачать бэкап прямо сейчас</button>
     </div>`;
@@ -1438,7 +1442,7 @@ function viewSettings() {
     <input class="inp" data-set-s="token" value="${esc(S.sync.token)}" placeholder="из журнала setupSync()">
     <button class="btn ghost sm" data-act="sync-now" style="margin-top:13px">Синхронизировать сейчас</button>
     <div class="between" style="margin-top:11px"><span class="dim" style="font-size:12.5px">Состояние</span>
-      <span class="badge" style="${S.sync.status === "err" ? "color:#F0918B" : S.sync.status === "ok" ? "color:var(--turq2)" : ""}">${
+      <span class="badge" style="${S.sync.status === "err" ? "color:#EE6F70" : S.sync.status === "ok" ? "color:var(--turq2)" : ""}">${
         !SYNC.configured() ? "не настроена" : S.sync.status === "err" ? "не проходит"
           : S.sync.fails ? "сбой, повтор" : S.sync.status === "ok" ? "работает" : "не запускалась"}</span></div>
     <div class="between" style="margin-top:6px"><span class="dim" style="font-size:12.5px">Последний обмен</span>
@@ -1458,7 +1462,7 @@ function viewSettings() {
     <div class="hint">Всего операций: ${S.tx.length}. Файл заменит текущие данные целиком.</div>
     <hr class="sep">
     <div class="between"><span class="dim" style="font-size:12.5px">Где хранятся данные</span>
-      <span class="badge" style="${store.volatile ? "color:#F0918B" : ""}">${store.mode}</span></div>
+      <span class="badge" style="${store.volatile ? "color:#EE6F70" : ""}">${store.mode}</span></div>
     <div class="between" style="margin-top:6px"><span class="dim" style="font-size:12.5px">Защита от очистки браузером</span>
       <span class="badge">${store.persisted === true ? "включена" : store.persisted === false ? "отклонена" : "недоступна"}</span></div>
     <div class="between" style="margin-top:6px"><span class="dim" style="font-size:12.5px">Последний бэкап</span>
