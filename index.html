@@ -63,7 +63,7 @@
   /* --- чернила --- */
   --tx-1:#F2E9D8;        /* cream    — основной текст, 14.0:1 к фону */
   --tx-2:#B9BCCC;        /* вторичный текст */
-  --tx-3:#8A8DA1;        /* приглушённый, 5.2:1 — не ставить на surface-2 */
+  --tx-3:#9BA0B4;        /* приглушённый: 5,73:1 на surface, 4,69 на surface-2 */
 
   /* --- статусы: светлые шаги, проходят AA как текст на тёмном --- */
   --pos:#6FB088;         /* доход, норма      6.6:1 */
@@ -97,11 +97,20 @@ body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 button{border:0;background:none;cursor:pointer}
 :focus-visible{outline:2px solid var(--turq2);outline-offset:2px}
+/* Без :active нажатие цифры не давало никакого отклика, а результат ввода
+   при этом уезжал за экран — набирали вслепую. */
+.pad button:active,.chip:active,.seg button:active,.tabs button:active,
+.btn:active,.icon-btn:active,#fab:active,.badge[data-act]:active{transform:scale(.97);opacity:.75}
+.li[data-act]:active{background:var(--ink3)}
 
 #app{max-width:520px;margin:0 auto;padding:0 var(--s4)}
 
 /* ================== Шапка ================== */
-.top{display:flex;align-items:center;gap:10px;padding:16px 2px 10px;position:sticky;top:0;background:linear-gradient(var(--ink) 76%,rgba(14,27,61,0));z-index:20}
+/* Градиент в прозрачность оставлял нижнюю четверть шапки насквозь видимой:
+   карточки при скролле наезжали прямо на подзаголовок. Матовая подложка
+   как у нижней панели — тот же приём, та же плотность. */
+.top{display:flex;align-items:center;gap:10px;padding:16px 2px 10px;position:sticky;top:0;
+  background:var(--ink);box-shadow:0 10px 14px -10px var(--ink);z-index:20}
 .top h1{font-family:var(--fd);font-size:21px;font-weight:700;margin:0;letter-spacing:.2px;flex:1}
 .top .sub{font-size:12px;color:var(--dim);font-weight:400;font-family:var(--fb)}
 .icon-btn{width:44px;height:44px;border-radius:var(--r-md);background:var(--ink2);display:grid;place-items:center;font-size:17px;border:1px solid var(--line)}
@@ -197,9 +206,20 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
   animation:up .22s cubic-bezier(.2,.9,.3,1)}
 @keyframes up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}
 .grab{width:38px;height:4px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+/* Кнопка записи стояла в конце длинного списка категорий и уходила
+   ниже сгиба: содержимое 1162 px при видимой части 792. Панель липнет
+   к низу шторки — записать можно с любого места. */
+.sheet-actions{position:sticky;bottom:0;z-index:3;display:grid;grid-template-columns:1fr 1.4fr;gap:8px;
+  margin:14px -14px calc(-18px - env(safe-area-inset-bottom));
+  padding:10px 14px calc(14px + env(safe-area-inset-bottom));
+  background:var(--ink2);box-shadow:0 -8px 10px -8px var(--ink)}
+.sheet-actions .btn{margin:0}
 
 /* ================== Клавиатура ================== */
-.amount{text-align:center;padding:10px 0 4px}
+/* Сумма липнет к верху шторки: при прокрутке к категориям она уходила
+   за экран, и ввод шёл вслепую. */
+.amount{position:sticky;top:-1px;z-index:3;text-align:center;padding:10px 0 8px;
+  background:var(--ink2);box-shadow:0 8px 10px -8px var(--ink)}
 .amount .v{font-family:var(--fn);font-size:42px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
 .amount .c{font-size:12px;color:var(--dim);margin-top:2px}
 .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
@@ -245,7 +265,26 @@ button.badge,.badge[data-act]{min-height:24px;padding:5px 9px;display:inline-fle
 .fx-row .num.dim{font-weight:400}
 .card.alarm{border-color:rgba(232,52,74,.55);background:linear-gradient(var(--ink2),rgba(232,52,74,.10))}
 .card.warn-soft{border-color:rgba(201,162,78,.35);padding:10px 12px}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* Единственным медиазапросом был reduced-motion: на 1369 px приложение
+   рисовало колонку 520 px с полями по 425. От планшета — две колонки,
+   карточки не разрезаются между ними. */
+@media (min-width:900px){
+  #app{max-width:900px;padding:0 var(--s6)}
+  #view{columns:2;column-gap:var(--s4)}
+  #view>*{break-inside:avoid;-webkit-column-break-inside:avoid}
+  .top{max-width:900px;margin:0 auto}
+  .tabs .in{max-width:900px}
+}
+@media (min-width:1280px){
+  #app{max-width:1180px}
+  .top,.tabs .in{max-width:1180px}
+  #view{column-gap:var(--s6)}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .pad button:active,.chip:active,.seg button:active,.tabs button:active,
+  .btn:active,.icon-btn:active,#fab:active,.badge[data-act]:active{transform:none}
+}
 </style>
 </head>
 <body>
@@ -461,9 +500,20 @@ function balances() {
   });
   return m;
 }
-function totalBase() {
+/**
+ * Свободные деньги: только остатки счетов, без взносов в цели.
+ * Заголовок сводки обязан показывать именно это — иначе рядом стоят
+ * «всего 48 млн» и «можно тратить в день −120 тыс», и одно противоречит
+ * другому. Взносы в цель со счёта списаны и обратно не тратятся.
+ */
+function availableBase() {
   const b = balances();
-  return S.accounts.reduce((s, a) => s + (b[a.id] || 0) * (a.cur === "USD" ? rate() : 1), 0) + goalPot();
+  return S.accounts.reduce((s, a) => s + (b[a.id] || 0) * (a.cur === "USD" ? rate() : 1), 0);
+}
+/** Свободные + отложенные. Для «месяцев свободы» и «запаса прочности»:
+    накопления в целях — тоже подушка, их считать надо. */
+function totalBase() {
+  return availableBase() + goalPot();
 }
 
 /**
@@ -1051,25 +1101,31 @@ function viewHome() {
 
   return `
   <div class="card">
-    <div class="eyebrow">Пульс месяца</div>
-    <svg class="pulse" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
-         role="img" aria-label="${esc(pulseSummary(s, m, dm, dayBudget, peakKey))}">${bars}</svg>
-    <div class="pulse-legend"><span>1</span><span>полоса — день${clipped ? " · прорезь — выброс за шкалу" : " · высота — сумма"}</span><span>${dm}</span></div>
-  </div>
-
-  <div class="card">
-    <div class="eyebrow">Всего на счетах</div>
-    <div class="num big">${nf0.format(Math.round(totalBase()))}<span style="font-size:16px;color:var(--dim)"> сум</span></div>
-    <div class="hint">по курсу ${nf0.format(rate())} сум за $1</div>
+    <div class="eyebrow">Доступно</div>
+    <div class="num big">${nf0.format(Math.round(availableBase()))}<span style="font-size:16px;color:var(--dim)"> сум</span></div>
+    <div class="hint">на счетах · курс ${nf0.format(rate())} за $1</div>
     <hr class="sep">
     ${S.accounts.map(a => `<div class="between" style="padding:4px 0">
         <span class="dim" style="font-size:13px">${a.icon || "•"} ${esc(a.name)}</span>
         <span class="num" style="font-weight:600;font-size:14px">${fmt(bals[a.id] || 0, a.cur)}</span>
       </div>`).join("")}
-    ${goalPot() ? `<div class="between" style="padding:4px 0">
+    ${goalPot() ? `<hr class="sep">
+      <div class="between" style="padding:4px 0">
         <span class="dim" style="font-size:13px">◎ Отложено в цели</span>
         <span class="num sf" style="font-weight:600;font-size:14px">${fmt(goalPot(), "UZS")}</span>
-      </div>` : ""}
+      </div>
+      <div class="between" style="padding:4px 0">
+        <span class="dim" style="font-size:13px">Всего с накоплениями</span>
+        <span class="num" style="font-weight:700;font-size:14px">${fmt(totalBase(), "UZS")}</span>
+      </div>
+      <div class="hint">Отложенное не входит в «доступно» и в дневной лимит: со счетов эти деньги уже списаны.</div>` : ""}
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Пульс месяца</div>
+    <svg class="pulse" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+         role="img" aria-label="${esc(pulseSummary(s, m, dm, dayBudget, peakKey))}">${bars}</svg>
+    <div class="pulse-legend"><span>1</span><span>полоса — день${clipped ? " · прорезь — выброс за шкалу" : " · высота — сумма"}</span><span>${dm}</span></div>
   </div>
 
   <div class="grid3">
@@ -1358,7 +1414,10 @@ function viewGoals() {
         <span class="dim" style="font-size:12px">${Math.round(p * 100)}% · осталось ${fmtShortCur(g.cur === "USD" ? rest / rate() : rest, g.cur)}</span>
         <span class="dim num" style="font-size:12px">${eta}</span></div>
       ${need ? `<div class="hint">${esc(need)}</div>` : ""}
-      <button class="btn sm" data-act="add" data-kind="goal" data-goal="${g.id}" style="margin-top:11px">Пополнить</button>
+      ${+g.initial > 0 ? `<div class="hint">Включая ${fmtShortCur(g.cur === "USD" ? (+g.initial) / rate() : +g.initial, g.cur)}, отложенные до начала учёта — этих денег на счетах никогда не было, поэтому в строку «Отложено в цели» на сводке они не входят.</div>` : ""}
+      ${rest > 0
+        ? `<button class="btn sm" data-act="add" data-kind="goal" data-goal="${g.id}" style="margin-top:11px">Пополнить</button>`
+        : `<button class="btn ghost sm" data-act="goal-done" data-id="${g.id}" style="margin-top:11px">Цель собрана — закрыть</button>`}
     </div>`;
   };
 
@@ -1410,8 +1469,14 @@ function viewIncome() {
   const target = +S.settings.incomeTarget || 0;
   const ser = incomeSeries(12);
   const past = ser.slice(0, 11).filter(x => x.v > 0);
-  const record = Math.max(0, ...ser.map(x => x.v));
-  const recMonth = ser.find(x => x.v === record);
+  /* Рекорд, среднее, серия и лестница считаются ТОЛЬКО по закрытым месяцам,
+     «Цель месяца» — по текущему. Пока рекорд брался по всему ряду, включая
+     незакрытый месяц, экран говорил «рекорд — август» и тут же
+     «до рекорда 13,0 млн»: одна метрика по текущему месяцу, другая
+     по трём прошлым. Текущий месяц теперь выносится отдельной строкой. */
+  const record = Math.max(0, ...past.map(x => x.v));
+  const recMonth = past.find(x => x.v === record);
+  const aheadOfRecord = record > 0 && s.inc > record;
   const avg3 = (() => { let a = 0, k = 0; for (let i = 1; i <= 3; i++) { const v = monthStats(shiftMonth(cur, -i)).inc; if (v > 0) { a += v; k++; } } return k ? a / k : s.inc; })();
   const dm = daysInMonth(cur), day = new Date().getDate(), daysLeft = Math.max(1, dm - day + 1);
   const gap = Math.max(0, target - s.inc);
@@ -1440,7 +1505,7 @@ function viewIncome() {
 
   return `
   ${target > 0 ? `<div class="card">
-    <div class="between"><div class="eyebrow" style="margin:0">Цель месяца</div><span class="badge">${Math.round(s.inc / target * 100)}%</span></div>
+    <div class="between"><div class="eyebrow" style="margin:0">Цель месяца · ${MONTHS[+cur.slice(5, 7) - 1]}</div><span class="badge">${Math.round(s.inc / target * 100)}%</span></div>
     <div class="row" style="margin:8px 0 10px;align-items:baseline">
       <div class="num big ${s.inc >= target ? "tq" : "sf"}">${fmtShort(s.inc)}</div>
       <div class="dim" style="font-size:13px">из ${fmtShort(target)}</div></div>
@@ -1455,22 +1520,24 @@ function viewIncome() {
     <button class="btn ghost sm" data-act="settings" style="margin-top:10px">Задать цель</button></div>`}
 
   <div class="grid2">
-    <div class="card tight"><div class="eyebrow">Личный рекорд</div>
+    <div class="card tight"><div class="eyebrow">Рекорд закрытых</div>
       <div class="num mid">${fmtShort(record)}</div>
-      <div class="hint">${recMonth && record > 0 ? monthName(recMonth.m) : "—"}</div></div>
-    <div class="card tight"><div class="eyebrow">Средний за 3 мес</div>
+      <div class="hint">${recMonth && record > 0 ? monthName(recMonth.m) : "—"}${aheadOfRecord ? `<br><span class="tq">этот месяц уже выше: ${fmtShort(s.inc)}</span>` : ""}</div></div>
+    <div class="card tight"><div class="eyebrow">Среднее, 3 закрытых</div>
       <div class="num mid">${fmtShort(avg3)}</div>
       <div class="hint">${record > 0 && avg3 < record ? "до рекорда " + fmtShort(record - avg3) : "на уровне рекорда"}</div></div>
     <div class="card tight"><div class="eyebrow">Цена часа</div>
       <div class="num mid">${fmtShort(hourly)}</div>
-      <div class="hint">при ${S.settings.hours} ч в месяц</div></div>
+      <div class="hint">3 закрытых месяца ÷ ${S.settings.hours} ч</div></div>
     <div class="card tight"><div class="eyebrow">Серия роста</div>
       <div class="num mid ${streak > 0 ? "tq" : ""}">${streak}</div>
-      <div class="hint">${plural(streak, "месяц подряд", "месяца подряд", "месяцев подряд")} без падения</div></div>
+      <div class="hint">${plural(streak, "закрытый месяц подряд", "закрытых месяца подряд", "закрытых месяцев подряд")} без падения</div></div>
   </div>
 
   ${target > 0 ? `<div class="card">
-    <div class="eyebrow">Лестница уровней</div>
+    <div class="between" style="margin-bottom:8px">
+      <div class="eyebrow" style="margin:0">Лестница уровней</div>
+      <span class="badge">по 3 закрытым</span></div>
     <div class="lvl">${LV.map((l, i) => `<i class="${i < reached ? "on" : ""}"></i>`).join("")}</div>
     <div class="pulse-legend" style="margin-top:6px">${LV.map((l, i) => `<span class="${i === reached - 1 ? "lvl-now" : ""}">${l[0]}</span>`).join("")}</div>
     <div class="hint" style="margin-top:8px">${reached ? `Текущий уровень — <b>${LV[reached - 1][0]}</b>. ` : "Пока ниже первого уровня. "}${next ? `Следующий — <b>${next[0]}</b> при среднем доходе ${fmtShort(target * next[1])} в месяц, это ещё +${fmtShort(target * next[1] - avg3)}.` : "Верхний уровень взят."}</div>
@@ -1659,7 +1726,16 @@ const draftVal = () => { const v = parseFloat(String(draft.buf).replace(",", "."
 function sheetEntry() {
   const c = draftCur();
   const shown = draft.buf === "" ? "0" : draft.buf;
-  const catList = S.cats.filter(x => x.kind === (draft.kind === "income" ? "income" : "expense"));
+  /* Частые категории вперёд: список из 16 штук в алфавитном порядке
+     заставлял скроллить до нужной. Порядок внутри одинаковой частоты
+     сохраняется авторский, поэтому список не перетасовывается на ровном месте. */
+  const useCount = {};
+  S.tx.forEach(t => { if (t.cat) useCount[t.cat] = (useCount[t.cat] || 0) + 1; });
+  const catList = S.cats
+    .map((x, i) => ({ x, i }))
+    .filter(o => o.x.kind === (draft.kind === "income" ? "income" : "expense"))
+    .sort((a, b) => (useCount[b.x.id] || 0) - (useCount[a.x.id] || 0) || a.i - b.i)
+    .map(o => o.x);
   const KINDS = [["expense", "Расход"], ["income", "Доход"], ["transfer", "Перевод"], ["goal", "В цель"]];
 
   openSheet(`
@@ -1707,11 +1783,12 @@ function sheetEntry() {
     <label class="f">Комментарий</label>
     <input class="inp" data-set-d="note" value="${esc(draft.note)}" placeholder="необязательно">
 
-    <div style="height:14px"></div>
-    <button class="btn" data-act="save-tx">${draft.id ? "Сохранить изменения" : "Записать"}</button>
-    <div class="grid2" style="margin-top:8px">
-      <button class="btn ghost sm" data-act="close">Отмена</button>
-      ${draft.id ? `<button class="btn danger sm" data-act="del-tx">Удалить</button>` : `<button class="btn ghost sm" data-act="close">Готово</button>`}
+    ${draft.id ? `<div style="height:14px"></div>
+      <button class="btn danger sm" data-act="del-tx">Удалить операцию</button>` : ""}
+
+    <div class="sheet-actions">
+      <button class="btn ghost" data-act="close">Отмена</button>
+      <button class="btn" data-act="save-tx">${draft.id ? "Сохранить" : "Записать"}</button>
     </div>
   `);
 }
@@ -1884,6 +1961,12 @@ document.addEventListener("click", e => {
       const i = S.goals.findIndex(x => x.id === g.id);
       if (i >= 0) S.goals[i] = g; else S.goals.push(g);
       save(); closeSheet(); render(); toast("Цель сохранена"); break;
+    }
+    case "goal-done": {
+      const g = goal(id); if (!g) break;
+      g.done = true; touch(g); save(); render();
+      toast("Цель закрыта");
+      break;
     }
     case "goal-return": {
       const g = goal(id); if (!g) break;

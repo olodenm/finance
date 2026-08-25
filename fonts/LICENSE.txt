@@ -1,0 +1,9 @@
+Шрифты в этой папке распространяются по SIL Open Font License 1.1 (OFL-1.1),
+которая разрешает размещение на своём сервере.
+
+Inter          — Rasmus Andersson        https://github.com/rsms/inter
+Unbounded      — Nikola Djurek / Google  https://github.com/googlefonts/unbounded
+JetBrains Mono — JetBrains               https://github.com/JetBrains/JetBrainsMono
+
+Подмножества latin и cyrillic, переменные (вес задан диапазоном).
+Собраны из пакетов @fontsource-variable/*.
