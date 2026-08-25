@@ -12,29 +12,84 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Финансы">
 <title>Финансы</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+<link rel="preload" href="fonts/inter-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/mono-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+/* ================== Шрифты ==================
+   Свои копии вместо Google Fonts: sw.js не кэширует чужие домены,
+   поэтому через CDN шрифты не работали офлайн. Все три — OFL-1.1,
+   переменные, вес задаётся диапазоном. Файлы лежат в ./fonts/. */
+@font-face{
+  font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;
+  src:url('fonts/inter-latin.woff2') format('woff2-variations');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;
+  src:url('fonts/inter-cyrillic.woff2') format('woff2-variations');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
+}
+@font-face{
+  font-family:'Unbounded';font-style:normal;font-weight:200 900;font-display:swap;
+  src:url('fonts/unbounded-latin.woff2') format('woff2-variations');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Unbounded';font-style:normal;font-weight:200 900;font-display:swap;
+  src:url('fonts/unbounded-cyrillic.woff2') format('woff2-variations');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
+}
+@font-face{
+  font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;
+  src:url('fonts/mono-latin.woff2') format('woff2-variations');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'JetBrains Mono';font-style:normal;font-weight:100 800;font-display:swap;
+  src:url('fonts/mono-cyrillic.woff2') format('woff2-variations');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
+}
+
 /* ================== Токены ================== */
 /* палитра — из дизайн-системы "Ponaehali Report Palette" */
 :root{
-  --ink:#0E1B3D;         /* ink — фон */
-  --ink2:#152357;        /* navy-ramp 700 — карточка */
-  --ink3:#23316B;        /* navy-ramp 600 — поднятая поверхность */
-  --line:rgba(255,255,255,.10);
-  --text:#F2E9D8;        /* cream — основной текст */
-  --dim:#8A8DA1;         /* navy-ramp 300 */
-  --turq:#3A8C5A;        /* pine — доход, норма (positive) */
-  --turq2:#6FB088;       /* pine, светлее */
-  --saffron:#C9A24E;     /* brass — цели, внимание (warning) */
-  --pom:#E8344A;         /* red — расход, перерасход (negative) */
-  --lapis:#2C6BB5;       /* cobalt — переводы */
-  --r:16px;
-  --pad:14px;
-  --fd:'Unbounded',sans-serif;                                    /* акцентная */
-  --fn:'JetBrains Mono',monospace;                                /* цифры */
-  --fb:'Inter',sans-serif;                                        /* интерфейс */
+  /* --- поверхности --- */
+  --ground:#0E1B3D;      /* ink   — фон экрана */
+  --surface:#152357;     /* navy 700 — карточка */
+  --surface-2:#23316B;   /* navy 600 — поднятая поверхность */
+  --line:rgba(242,233,216,.10);
+
+  /* --- чернила --- */
+  --tx-1:#F2E9D8;        /* cream    — основной текст, 14.0:1 к фону */
+  --tx-2:#B9BCCC;        /* вторичный текст */
+  --tx-3:#8A8DA1;        /* приглушённый, 5.2:1 — не ставить на surface-2 */
+
+  /* --- статусы: светлые шаги, проходят AA как текст на тёмном --- */
+  --pos:#6FB088;         /* доход, норма      6.6:1 */
+  --neg:#EE6F70;         /* расход, перерасход 5.8:1 */
+  --warn:#DCC38C;        /* цели, внимание    9.8:1 */
+  --info:#769FCF;        /* переводы */
+  /* --- базовые: только заливки, для текста контраста не хватает --- */
+  --pos-fill:#3A8C5A; --neg-fill:#E8344A; --warn-fill:#C9A24E; --info-fill:#2C6BB5;
+
+  /* --- шкала отступов, база 4 --- */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px; --s12:48px;
+
+  /* --- радиусы --- */
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+
+  /* --- гарнитуры, свои копии в ./fonts --- */
+  --fd:'Unbounded',system-ui,sans-serif;                          /* заголовки */
+  --fn:'JetBrains Mono',ui-monospace,SFMono-Regular,monospace;    /* цифры */
+  --fb:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; /* интерфейс */
+
+  /* --- псевдонимы старых имён: снять после рефакторинга разметки --- */
+  --ink:var(--ground); --ink2:var(--surface); --ink3:var(--surface-2);
+  --text:var(--tx-1);  --dim:var(--tx-3);
+  --turq:var(--pos-fill); --turq2:var(--pos);
+  --saffron:var(--warn-fill); --pom:var(--neg-fill); --lapis:var(--info-fill);
+  --r:var(--r-lg); --pad:var(--s4);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;background:var(--ink);color:var(--text);font-family:var(--fb);font-size:15px;line-height:1.4}
@@ -43,13 +98,13 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 button{border:0;background:none;cursor:pointer}
 :focus-visible{outline:2px solid var(--turq2);outline-offset:2px}
 
-#app{max-width:520px;margin:0 auto;padding:0 12px}
+#app{max-width:520px;margin:0 auto;padding:0 var(--s4)}
 
 /* ================== Шапка ================== */
 .top{display:flex;align-items:center;gap:10px;padding:16px 2px 10px;position:sticky;top:0;background:linear-gradient(var(--ink) 76%,rgba(14,27,61,0));z-index:20}
 .top h1{font-family:var(--fd);font-size:21px;font-weight:700;margin:0;letter-spacing:.2px;flex:1}
 .top .sub{font-size:12px;color:var(--dim);font-weight:400;font-family:var(--fb)}
-.icon-btn{width:38px;height:38px;border-radius:12px;background:var(--ink2);display:grid;place-items:center;font-size:17px;border:1px solid var(--line)}
+.icon-btn{width:44px;height:44px;border-radius:var(--r-md);background:var(--ink2);display:grid;place-items:center;font-size:17px;border:1px solid var(--line)}
 
 /* ================== Карточки ================== */
 .card{background:var(--ink2);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad);margin-bottom:10px}
@@ -59,20 +114,28 @@ button{border:0;background:none;cursor:pointer}
 .big{font-size:34px;font-weight:700;line-height:1.05}
 .mid{font-size:20px;font-weight:700}
 .dim{color:var(--dim)}
-.tq{color:var(--turq)}.sf{color:var(--saffron)}.pm{color:var(--pom)}.lz{color:var(--lapis)}
+/* Текст берёт светлые шаги: заливочные (--*-fill) на карточке дают 2,75–3,6:1. */
+.tq{color:var(--pos)}.sf{color:var(--warn)}.pm{color:var(--neg)}.lz{color:var(--info)}
 .row{display:flex;align-items:center;gap:10px}
 .between{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+/* В плитке 1/3 ширины «−11,4 млн» одной строкой не помещается ни при каком
+   кегле. Единица уходит вниз намеренно и оформленно — это не перенос. */
+.unit{display:block;font-size:11px;line-height:1.2;font-weight:400;color:var(--tx-3);letter-spacing:.06em;margin-top:2px;font-family:var(--fb)}
 hr.sep{border:0;border-top:1px solid var(--line);margin:10px 0}
 
 /* ================== Полосы ================== */
-.bar{height:8px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden}
-.bar>i{display:block;height:100%;border-radius:6px;
-  background:repeating-linear-gradient(115deg,var(--turq) 0 9px,var(--turq2) 9px 13px)}
-.bar.warn>i{background:repeating-linear-gradient(115deg,var(--saffron) 0 9px,#DCC38C 9px 13px)}
-.bar.over>i{background:repeating-linear-gradient(115deg,var(--pom) 0 9px,#F39A8E 9px 13px)}
-.bar.gold>i{background:repeating-linear-gradient(115deg,var(--saffron) 0 9px,#E6C27A 9px 13px)}
+/* Штриховка закреплена за перебором и больше ни за чем: пока ею была залита
+   любая полоса, она ничего не сообщала. Теперь это второй признак поверх
+   цвета — читается и без различения красного и зелёного. */
+.bar{position:relative;height:8px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:6px;background:var(--turq)}
+.bar.warn>i{background:var(--saffron)}
+.bar.gold>i{background:var(--saffron)}
+.bar.over>i{background:repeating-linear-gradient(115deg,var(--pom) 0 5px,#F39A8E 5px 9px)}
+/* Засечка лимита: видно, насколько полоса перевалила за бюджет */
+.bar>u{position:absolute;top:0;bottom:0;width:2px;background:var(--tx-1);opacity:.7;border-radius:1px}
 
 /* ================== Пульс месяца (сигнатура) ================== */
 .pulse{width:100%;height:78px;display:block}
@@ -92,15 +155,15 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:10px 0}
 
 /* ================== Чипы / сегменты ================== */
 .seg{display:flex;background:var(--ink);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
-.seg button{flex:1;padding:9px 4px;border-radius:9px;font-size:13px;font-weight:600;color:var(--dim)}
+.seg button{flex:1;padding:var(--s3) var(--s1);min-height:44px;border-radius:var(--r-sm);font-size:13px;font-weight:600;color:var(--dim)}
 .seg button.on{background:var(--ink3);color:var(--text)}
 .seg button.on[data-k="expense"]{background:rgba(232,52,74,.22);color:#EE6F70}
 .seg button.on[data-k="income"]{background:rgba(58,140,90,.2);color:var(--turq2)}
 .seg button.on[data-k="transfer"]{background:rgba(44,107,181,.2);color:#769FCF}
 .seg button.on[data-k="goal"]{background:rgba(201,162,78,.2);color:#DCC38C}
 .chips{display:flex;flex-wrap:wrap;gap:7px}
-.chip{padding:8px 11px;border-radius:11px;background:var(--ink3);border:1px solid transparent;font-size:13px;display:flex;gap:6px;align-items:center}
-.chip.on{border-color:var(--turq);background:rgba(58,140,90,.16)}
+.chip{padding:var(--s2) var(--s3);min-height:40px;border-radius:var(--r-md);background:var(--ink3);border:1px solid transparent;font-size:13px;display:flex;gap:6px;align-items:center}
+.chip.on{border-color:var(--pos);background:rgba(58,140,90,.16)}
 .chip.sm{padding:6px 10px;font-size:12.5px}
 
 /* ================== Поля ================== */
@@ -116,13 +179,15 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;justify-content:center;
   background:rgba(14,27,61,.92);backdrop-filter:blur(12px);border-top:1px solid var(--line);
   padding:6px 0 calc(6px + env(safe-area-inset-bottom))}
-.tabs .in{display:flex;width:100%;max-width:520px}
-.tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 0;color:var(--dim);font-size:10px;font-weight:600}
+.tabs .in{display:flex;width:100%;max-width:520px;gap:4px;align-items:stretch}
+.tabs .tt{display:flex;flex:1;min-width:0}
+.tabs button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:var(--s1) 2px;min-height:48px;color:var(--dim);font-size:11px;font-weight:600}
 .tabs button em{font-style:normal;font-size:18px;line-height:1}
 .tabs button.on{color:var(--turq2)}
-#fab{position:fixed;z-index:31;right:max(14px,calc(50% - 260px + 14px));bottom:calc(80px + env(safe-area-inset-bottom));
-  width:58px;height:58px;border-radius:20px;background:var(--saffron);color:var(--ink);font-size:30px;font-weight:700;
-  display:grid;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+/* «+» стоит в самой панели, а не поверх экрана: плавающая кнопка накрывала
+   суммы и целые строки операций — на «Журнале» строка становилась ненажимаемой. */
+#fab{flex:none;width:56px;min-height:48px;border-radius:var(--r-md);background:var(--saffron);
+  color:var(--ink);font-size:26px;font-weight:700;display:grid;place-items:center;line-height:1}
 
 /* ================== Шторка ================== */
 .sheet{position:fixed;inset:0;z-index:60;background:rgba(5,9,20,.6);display:flex;align-items:flex-end;justify-content:center}
@@ -142,7 +207,7 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 .pad button.alt{background:var(--ink);color:var(--dim);font-size:17px}
 
 /* ================== Прочее ================== */
-.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%);
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);
   background:var(--ink3);border:1px solid var(--line);padding:10px 16px;border-radius:12px;font-size:13.5px;z-index:80;
   opacity:0;pointer-events:none;transition:opacity .18s}
 .toast.on{opacity:1}
@@ -157,12 +222,27 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 .lvl{display:flex;gap:5px;margin-top:8px}
 .lvl i{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.08)}
 .lvl i.on{background:var(--saffron)}
+/* Текущий уровень читается и без цвета заливки — подписью */
+.lvl-now{color:var(--tx-1);font-weight:700}
 .dots{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
 .dots i{width:11px;height:11px;border-radius:4px;background:rgba(255,255,255,.09)}
 .dots i.on{background:var(--turq)}
 .dots i.half{background:linear-gradient(90deg,var(--turq) 50%,rgba(255,255,255,.09) 50%)}
-.badge{font-size:10.5px;padding:3px 7px;border-radius:7px;background:var(--ink3);color:var(--dim);font-weight:700}
+.badge{font-size:10.5px;padding:3px 7px;border-radius:7px;background:var(--ink3);color:var(--tx-2);font-weight:700}
+/* Бейдж-кнопка обязан дотягивать до 24×24 — минимум WCAG 2.2 (SC 2.5.8). */
+button.badge,.badge[data-act]{min-height:24px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px}
 .hint{font-size:12px;color:var(--dim);margin-top:6px}
+/* Эхо под полем: «18000000» без разделителей глазом не проверить */
+.echo{font-size:12px;color:var(--tx-2);margin-top:5px;letter-spacing:.02em;min-height:1em}
+/* Три колонки вместо одной строки: «1,6 млн в мес · 19,2 млн в год»
+   на 390 px рвалось так, что «в год» оставалось сиротой на второй строке. */
+.fx-head,.fx-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:baseline}
+.fx-head{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--tx-3);padding:2px 0 4px}
+.fx-head span+span,.fx-row span+span{text-align:right;min-width:62px}
+.fx-row{padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.fx-row .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fx-row .num{font-size:12.5px;font-weight:700;white-space:nowrap}
+.fx-row .num.dim{font-weight:400}
 .card.alarm{border-color:rgba(232,52,74,.55);background:linear-gradient(var(--ink2),rgba(232,52,74,.10))}
 .card.warn-soft{border-color:rgba(201,162,78,.35);padding:10px 12px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -173,8 +253,8 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
   <div class="top" id="top"></div>
   <main id="view"></main>
 </div>
-<button id="fab" aria-label="Добавить операцию">+</button>
-<nav class="tabs"><div class="in" id="tabs"></div></nav>
+<nav class="tabs"><div class="in"><div class="tt" id="tabs"></div>
+  <button id="fab" aria-label="Добавить операцию">+</button></div></nav>
 <div class="sheet" id="sheet" hidden><div class="card2" id="sheetBody"></div></div>
 <div class="syncing" id="syncing" hidden><i></i>обмен с таблицей</div>
 <div class="toast" id="toast"></div>
@@ -242,16 +322,34 @@ const shiftMonth = (m, k) => { const d = new Date(+m.slice(0, 4), +m.slice(5, 7)
 
 const nf0 = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
 const nf2 = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/* Единица отделяется неразрывным пробелом: иначе «14,8 млн» в узкой плитке
+   переносится и «млн» уезжает на вторую строку, ломая сетку. */
 function fmt(v, cur) {
   if (cur === "USD") return "$" + nf2.format(v || 0);
-  return nf0.format(Math.round(v || 0)) + " сум";
+  return nf0.format(Math.round(v || 0)) + "\u00A0сум";
 }
 function fmtShort(v) {
   const a = Math.abs(v || 0), sign = v < 0 ? "−" : "";
-  if (a >= 1e9) return sign + (a / 1e9).toFixed(2).replace(".", ",") + " млрд";
-  if (a >= 1e6) return sign + (a / 1e6).toFixed(a >= 1e8 ? 0 : 1).replace(".", ",") + " млн";
-  if (a >= 1e4) return sign + nf0.format(Math.round(a / 1e3)) + " тыс";
+  if (a >= 1e9) return sign + dec(a / 1e9, 2) + "\u00A0млрд";
+  if (a >= 1e6) return sign + dec(a / 1e6, a >= 1e8 ? 0 : 1) + "\u00A0млн";
+  if (a >= 1e4) return sign + nf0.format(Math.round(a / 1e3)) + "\u00A0тыс";
   return sign + nf0.format(Math.round(a));
+}
+/** Дробное число по-русски: запятая, а не точка */
+const dec = (v, d) => (v || 0).toFixed(d).replace(".", ",");
+/** Короткая форма в нужной валюте: «38,0 млн» либо «$1 700» */
+function fmtShortCur(v, cur) {
+  return cur === "USD" ? "$" + nf0.format(Math.round(v || 0)) : fmtShort(v);
+}
+/** Дата человеческим видом: «31 дек 2026» вместо ISO */
+function fmtDate(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso))) return String(iso || "");
+  return +iso.slice(8, 10) + "\u00A0" + MONTHS_SHORT[+iso.slice(5, 7) - 1] + "\u00A0" + iso.slice(0, 4);
+}
+/** Крупное значение для узкой плитки: число сверху, единица отдельной строкой */
+function statBig(v) {
+  const parts = fmtShort(v).split("\u00A0");
+  return esc(parts[0]) + (parts[1] ? `<span class="unit">${esc(parts[1])}</span>` : "");
 }
 function plural(n, one, few, many) {
   const a = Math.abs(n) % 100, b = a % 10;
@@ -851,6 +949,24 @@ function monthNav(sub) {
           <button class="icon-btn" data-act="mnext" aria-label="Следующий месяц">›</button>`;
 }
 
+/**
+ * Словесная сводка «Пульса месяца» для скринридера.
+ * Озвучивать 31 полосу по очереди хуже, чем не озвучивать вовсе,
+ * поэтому SVG отдаёт один вывод: пик, перерасходы, пустые дни.
+ * Подписи <title> у полос при этом остаются — для мыши и касания.
+ */
+function pulseSummary(s, m, dm, dayBudget, peakKey) {
+  const days = Object.keys(s.byDay).filter(k => ym(k) === m);
+  const spent = days.filter(k => s.byDay[k] > 0);
+  if (!spent.length) return `Траты по дням месяца: за ${dm} ${plural(dm, "день", "дня", "дней")} трат не было.`;
+  const over = dayBudget > 0 ? spent.filter(k => s.byDay[k] > dayBudget).length : 0;
+  const zero = dm - spent.length;
+  const peak = peakKey ? `Самый крупный день — ${+peakKey.slice(8, 10)} ${MONTHS_SHORT[+m.slice(5, 7) - 1]}, ${fmtShort(s.byDay[peakKey])}.` : "";
+  return `Траты по дням месяца, ${dm} ${plural(dm, "день", "дня", "дней")}. ${peak}`
+    + (over ? ` Выше дневного лимита ${over} ${plural(over, "день", "дня", "дней")}.` : "")
+    + (zero ? ` Без трат ${zero} ${plural(zero, "день", "дня", "дней")}.` : "");
+}
+
 /* ---------------- Сводка ---------------- */
 function viewHome() {
   const m = S.ui.month, s = monthStats(m), cur = ym(todayStr());
@@ -876,13 +992,19 @@ function viewHome() {
   /* Пульс месяца — сигнатурная полоса */
   const maxDay = Math.max(1, ...Object.values(s.byDay));
   const dayBudget = bud > 0 ? bud / dm : maxDay * 0.6;
-  /* Корневая шкала: высота ~ √(сумма дня).
-     На линейной шкале месяц с арендой нечитаем: день 5 млн выше дня 200 тыс
-     в 25 раз, и все обычные дни сливаются в чёрточки у основания.
-     Корень сжимает разрыв до 5 раз — крупный день остаётся самым высоким,
-     но мелкие возвращаются в картинку. Цвета по-прежнему считаются
-     от исходных сумм, шкала на них не влияет. */
-  const yScale = v => Math.sqrt(Math.min(1, Math.max(0, v) / maxDay)) * (H - 8);
+  /* Шкала линейная: длина полосы обязана быть пропорциональна сумме.
+     Прежний корень занижал выбросы — день 5,9 млн против медианных 513 тыс
+     это 11,5× по деньгам, но всего 3,4× по высоте, и главный смысл графика
+     («вот день, который убил месяц») пропадал.
+     Чтобы аренда не расплющила остальные дни, верх шкалы обрезан по 90-му
+     процентилю трат, но не ниже полутора дневных лимитов. Полосы выше среза
+     рисуются до потолка и помечаются прорезью — приём «разорванной полосы». */
+  const spentDays = Object.values(s.byDay).filter(v => v > 0).sort((a, b) => a - b);
+  const peakKey = Object.keys(s.byDay).reduce((a, k) => (s.byDay[k] > (s.byDay[a] || 0) ? k : a), "");
+  const p90 = spentDays.length ? spentDays[Math.min(spentDays.length - 1, Math.floor(spentDays.length * 0.9))] : 1;
+  const capDay = Math.max(1, dayBudget > 0 ? Math.max(p90, dayBudget * 1.5) : p90);
+  const yScale = v => Math.min(1, Math.max(0, v) / capDay) * (H - 8);
+  let clipped = 0;
   const W = 100, H = 62, gap = 0.5;
   const bw = (W - gap * (dm - 1)) / dm;
   let bars = "";
@@ -894,9 +1016,21 @@ function viewHome() {
     const h = v > 0 ? Math.max(2, yScale(v)) : 0;
     const future = isCur && d > dayNow;
     const col = v === 0 ? "rgba(255,255,255,.06)" : (v > dayBudget * 1.6 ? "var(--pom)" : v > dayBudget ? "var(--saffron)" : "var(--turq)");
-    if (h > 0) bars += `<rect class="d" x="${x.toFixed(2)}" y="${(H - h).toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}" rx="${Math.min(0.9, bw / 2).toFixed(2)}" fill="${col}" style="animation-delay:${d * 9}ms"/>`;
-    else bars += `<rect x="${x.toFixed(2)}" y="${H - 1.6}" width="${bw.toFixed(2)}" height="1.6" rx=".6" fill="${future ? "rgba(255,255,255,.05)" : "rgba(255,255,255,.11)"}"/>`;
-    if (incDays[d]) bars += `<rect x="${x.toFixed(2)}" y="0" width="${bw.toFixed(2)}" height="2.6" rx="1" fill="var(--saffron)"/>`;
+    /* Статус дня кодируется не только цветом: подпись доступна по нажатию
+       и читается скринридером — красный и зелёный при дейтеранопии
+       различаются слабо (ΔE 4). */
+    const status = v === 0 ? "без трат" : v > dayBudget * 1.6 ? "сильно выше лимита"
+      : v > dayBudget ? "выше лимита" : "в пределах лимита";
+    const over = v > capDay;
+    if (over) clipped++;
+    const tip = `<title>${d} ${MONTHS_SHORT[+m.slice(5, 7) - 1]} · ${fmtShort(v)} · ${status}${over ? " · выброс за шкалу" : ""}</title>`;
+    if (h > 0) {
+      bars += `<rect class="d" x="${x.toFixed(2)}" y="${(H - h).toFixed(2)}" width="${bw.toFixed(2)}" height="${h.toFixed(2)}" rx="${Math.min(0.9, bw / 2).toFixed(2)}" fill="${col}" style="animation-delay:${d * 9}ms">${tip}</rect>`;
+      /* Прорезь цветом карточки: полоса упёрлась в потолок, настоящая сумма больше */
+      if (over) bars += `<rect x="${x.toFixed(2)}" y="${(H - h + 2.2).toFixed(2)}" width="${bw.toFixed(2)}" height="1.3" fill="var(--ink2)" aria-hidden="true"/>`;
+    }
+    else bars += `<rect x="${x.toFixed(2)}" y="${H - 1.6}" width="${bw.toFixed(2)}" height="1.6" rx=".6" fill="${future ? "rgba(255,255,255,.05)" : "rgba(255,255,255,.11)"}">${tip}</rect>`;
+    if (incDays[d]) bars += `<rect x="${x.toFixed(2)}" y="0" width="${bw.toFixed(2)}" height="2.6" rx="1" fill="var(--saffron)"><title>${d} ${MONTHS_SHORT[+m.slice(5, 7) - 1]} · был доход</title></rect>`;
   }
   if (bud > 0) {
     /* Линия дневного лимита живёт в той же шкале, что и полосы */
@@ -913,13 +1047,14 @@ function viewHome() {
     </div>`;
   }).join("");
 
-  const recent = S.tx.slice().sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id)).slice(0, 5).map(txRow).join("");
+  const recent = S.tx.slice().sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id)).slice(0, 5).map(t => txRow(t)).join("");
 
   return `
   <div class="card">
     <div class="eyebrow">Пульс месяца</div>
-    <svg class="pulse" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>
-    <div class="pulse-legend"><span>1</span><span>полоса — день · высота — корень из суммы</span><span>${dm}</span></div>
+    <svg class="pulse" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+         role="img" aria-label="${esc(pulseSummary(s, m, dm, dayBudget, peakKey))}">${bars}</svg>
+    <div class="pulse-legend"><span>1</span><span>полоса — день${clipped ? " · прорезь — выброс за шкалу" : " · высота — сумма"}</span><span>${dm}</span></div>
   </div>
 
   <div class="card">
@@ -938,17 +1073,21 @@ function viewHome() {
   </div>
 
   <div class="grid3">
-    <div class="card tight"><div class="eyebrow">Доход</div><div class="num mid tq">${fmtShort(s.inc)}</div></div>
-    <div class="card tight"><div class="eyebrow">Расход</div><div class="num mid pm">${fmtShort(s.exp)}</div></div>
-    <div class="card tight"><div class="eyebrow">Остаток</div><div class="num mid ${s.net >= 0 ? "" : "pm"}">${fmtShort(s.net)}</div></div>
+    <div class="card tight"><div class="eyebrow">Доход</div><div class="num mid tq">${statBig(s.inc)}</div></div>
+    <div class="card tight"><div class="eyebrow">Расход</div><div class="num mid">${statBig(s.exp)}</div></div>
+    <div class="card tight"><div class="eyebrow">Остаток</div><div class="num mid ${s.net >= 0 ? "" : "pm"}">${statBig(s.net)}</div></div>
   </div>
 
   ${bud > 0 ? `<div class="card">
     <div class="between"><div class="eyebrow" style="margin:0">Бюджет месяца</div>
       <span class="badge">${Math.round(s.exp / bud * 100)}%</span></div>
     <div class="bar ${s.exp > bud ? "over" : s.exp > bud * .8 ? "warn" : ""}" style="margin:10px 0 8px"><i style="width:${Math.min(100, s.exp / bud * 100).toFixed(1)}%"></i></div>
-    <div class="between"><span class="dim" style="font-size:12.5px">Потрачено ${fmtShort(s.exp)} из ${fmtShort(bud)}</span>
-      <span class="num" style="font-size:13px">прогноз ${fmtShort(forecast)}</span></div>
+    <div class="grid2" style="gap:8px">
+      <div><div class="dim" style="font-size:11.5px">Потрачено из ${fmtShort(bud)}</div>
+        <div class="num" style="font-size:14px;font-weight:700;white-space:nowrap">${fmtShort(s.exp)}</div></div>
+      <div style="text-align:right"><div class="dim" style="font-size:11.5px">Прогноз на месяц</div>
+        <div class="num ${forecast > bud ? "pm" : ""}" style="font-size:14px;font-weight:700;white-space:nowrap">${fmtShort(forecast)}</div></div>
+    </div>
     ${isCur ? `<hr class="sep"><div class="between"><span class="dim" style="font-size:12.5px">Можно тратить в день</span>
       <span class="num mid ${perDay < 0 ? "pm" : "tq"}">${fmtShort(perDay)}</span></div>
       <div class="hint">осталось ${daysLeft} ${plural(daysLeft, "день", "дня", "дней")}${upcomingFixed > 0 ? " · в резерве на обязательные " + fmtShort(upcomingFixed) : ""}</div>` : ""}
@@ -966,7 +1105,12 @@ function viewHome() {
 }
 
 /* ---------------- Журнал ---------------- */
-function txRow(t) {
+/**
+ * Строка операции. showDate=false для журнала: там дата уже вынесена
+ * в заголовок группы, и повтор в каждой строке — чистый шум.
+ */
+function txRow(t, showDate) {
+  if (showDate === undefined) showDate = true;
   const c = cat(t.cat), a = acc(t.acc);
   let icon = c ? c.icon : "•", title = c ? c.name : "Операция", sign = "−", cls = "";
   if (t.kind === "income") { sign = "+"; cls = "tq"; }
@@ -976,7 +1120,7 @@ function txRow(t) {
     if (t.amount < 0) { title = "Возврат из «" + (g ? g.name : "цели") + "»"; sign = "←"; cls = "tq"; }
     else { title = g ? g.name : "Цель удалена"; sign = "→"; cls = "sf"; }
   }
-  const sub = [t.date.slice(8, 10) + " " + MONTHS_SHORT[+t.date.slice(5, 7) - 1],
+  const sub = [showDate ? t.date.slice(8, 10) + " " + MONTHS_SHORT[+t.date.slice(5, 7) - 1] : "",
     t.kind === "transfer" ? (acc(t.acc) ? acc(t.acc).name : "") + " → " + (acc(t.acc2) ? acc(t.acc2).name : "") : (a ? a.name : ""),
     t.note].filter(Boolean).join(" · ");
   return `<div class="li" data-act="edit" data-id="${t.id}">
@@ -999,7 +1143,7 @@ function viewLog() {
     return `<div class="card">
       <div class="between"><span class="eyebrow" style="margin:0">${d.slice(8, 10)} ${MONTHS_SHORT[+d.slice(5, 7) - 1]}, ${["вс","пн","вт","ср","чт","пт","сб"][dd.getDay()]}</span>
         <span class="badge num">${sum ? "−" + fmtShort(sum) : "—"}</span></div>
-      <div style="margin-top:4px">${day.map(txRow).join("")}</div>
+      <div style="margin-top:4px">${day.map(t => txRow(t, false)).join("")}</div>
     </div>`;
   }).join("");
 }
@@ -1017,7 +1161,7 @@ function viewStat() {
     return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
       <div class="between"><span style="font-size:13.5px">${x.c.icon} ${esc(x.c.name)}${x.c.fixed ? ` <span class="badge">обяз.</span>` : ""}</span>
         <span class="num" style="font-weight:700;font-size:13.5px">${fmtShort(x.sum)}</span></div>
-      <div class="bar ${over ? "over" : ""}" style="margin-top:6px;height:6px"><i style="width:${(x.sum / maxC * 100).toFixed(1)}%"></i></div>
+      <div class="bar ${over ? "over" : ""}" style="margin-top:6px;height:6px"><i style="width:${(x.sum / maxC * 100).toFixed(1)}%"></i>${bud > 0 && bud < maxC ? `<u style="left:${(bud / maxC * 100).toFixed(1)}%" title="лимит ${fmtShort(bud)}"></u>` : ""}</div>
       <div class="between" style="margin-top:4px">
         <span class="dim num" style="font-size:11px">${x.n}× по ${fmtShort(x.median)}${x.avg / Math.max(1, x.median) >= 1.5 ? " (сред. " + fmtShort(x.avg) + ")" : ""}</span>
         <span class="dim" style="font-size:11px">${(x.sum / s.exp * 100).toFixed(0)}%${bud > 0 ? (over ? " · перебор " + fmtShort(x.sum - bud) : " · остаток " + fmtShort(bud - x.sum)) : ""}</span>
@@ -1027,8 +1171,10 @@ function viewStat() {
   /* Тренд 6 месяцев */
   const ser = [];
   for (let i = 5; i >= 0; i--) { const mm = shiftMonth(m, -i); const st = monthStats(mm); ser.push({ m: mm, i: st.inc, e: st.exp }); }
+  /* Месяцы до начала истории — пустые слоты, которые нечего показывать */
+  while (ser.length > 1 && !ser[0].i && !ser[0].e) ser.shift();
   const mx = Math.max(1, ...ser.map(x => Math.max(x.i, x.e)));
-  const W = 100, H = 46, step = W / 6;
+  const W = 100, H = 46, step = W / ser.length;
   const trend = ser.map((x, k) => {
     const bx = k * step + step * .12, bw = step * .34;
     const hi = x.i / mx * H, he = x.e / mx * H;
@@ -1065,19 +1211,22 @@ function viewStat() {
 
   ${DS.median > 0 && DS.mean / DS.median >= 1.6 ? `<div class="card tight">
     <div class="eyebrow">Почему средний день врёт</div>
-    <div class="hint">Средний день ${fmtShort(DS.mean)} — это ${(DS.mean / DS.median).toFixed(1)}× от типичного ${fmtShort(DS.median)}: несколько крупных платежей тянут его вверх. Самый большой день месяца — ${fmtShort(DS.max)}. Ориентируйся на медиану.</div>
+    <div class="hint">Средний день ${fmtShort(DS.mean)} — это ${dec(DS.mean / DS.median, 1)}× от типичного ${fmtShort(DS.median)}: несколько крупных платежей тянут его вверх. Самый большой день месяца — ${fmtShort(DS.max)}. Ориентируйся на медиану.</div>
   </div>` : ""}
 
   <div class="card">
     <div class="eyebrow">Месяцев свободы</div>
-    <div class="row"><div class="num big">${months.toFixed(1)}</div>
+    <div class="row"><div class="num big">${dec(months, 1)}</div>
       <div class="hint" style="margin:0">накопления ${fmtShort(totalBase())}<br>делённые на средний расход ${fmtShort(ae)}</div></div>
     <div class="dots">${dots}</div>
   </div>
 
   <div class="card">
-    <div class="eyebrow">Доход и расход, 6 месяцев</div>
-    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:74px;display:block">${trend}</svg>
+    <div class="between" style="margin-bottom:8px">
+      <div class="eyebrow" style="margin:0">Доход и расход, ${ser.length} ${plural(ser.length, "месяц", "месяца", "месяцев")}</div>
+      <span class="badge">до ${fmtShort(mx)}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:74px;display:block"
+         role="img" aria-label="Доход и расход по месяцам, максимум шкалы ${fmtShort(mx)}">${trend}</svg>
     <div class="pulse-legend">${ser.map(x => `<span>${MONTHS_SHORT[+x.m.slice(5, 7) - 1]}</span>`).join("")}</div>
     <div class="row" style="margin-top:8px;font-size:11.5px;color:var(--dim)">
       <span class="tq">■</span> доход <span class="pm" style="margin-left:8px">■</span> расход</div>
@@ -1099,7 +1248,7 @@ function viewStat() {
       </div>`;
     return `<div class="card">
       <div class="eyebrow">Рост категорий к прошлому месяцу</div>
-      ${G.k > 1.02 ? `<div class="hint" style="margin:0 0 6px">Текущий месяц приведён к полному (×${G.k.toFixed(2)}), иначе сравнение было бы не в пользу незакрытого месяца.</div>` : ""}
+      ${G.k > 1.02 ? `<div class="hint" style="margin:0 0 6px">Текущий месяц приведён к полному (×${dec(G.k, 2)}), иначе сравнение было бы не в пользу незакрытого месяца.</div>` : ""}
       ${up.map(line).join("") || `<div class="hint">Растущих категорий нет.</div>`}
       ${down.length ? `<div class="eyebrow" style="margin:12px 0 0">Снизились</div>${down.map(line).join("")}` : ""}
     </div>`;
@@ -1113,9 +1262,11 @@ function viewStat() {
     return `<div class="card">
       <div class="eyebrow">Постоянные расходы</div>
       ${F.length && F[0].partial ? `<div class="hint" style="margin:0 0 6px">Пока считаю по незакрытому месяцу — завершённых с расходами ещё нет.</div>` : ""}
-      ${F.map(x => `<div class="between" style="padding:6px 0;border-bottom:1px solid var(--line)">
-          <span style="font-size:13px">${x.c.icon} ${esc(x.c.name)}</span>
-          <span class="num" style="font-size:12.5px"><b>${fmtShort(x.perMonth)}</b><span class="dim"> в мес · ${fmtShort(x.perMonth * 12)} в год</span></span>
+      <div class="fx-head"><span></span><span>в месяц</span><span>в год</span></div>
+      ${F.map(x => `<div class="fx-row">
+          <span class="nm">${x.c.icon} ${esc(x.c.name)}</span>
+          <span class="num">${fmtShort(x.perMonth)}</span>
+          <span class="num dim">${fmtShort(x.perMonth * 12)}</span>
         </div>`).join("")}
       ${perMonth > 0 ? `<div class="between" style="margin-top:9px">
         <span class="dim" style="font-size:12.5px">Итого обязательных</span>
@@ -1124,7 +1275,7 @@ function viewStat() {
       ${R.length ? `<div class="eyebrow" style="margin:13px 0 0">Найденные повторы</div>
         ${R.slice(0, 6).map(r => `<div class="between" style="padding:6px 0;border-bottom:1px solid var(--line)">
             <span style="font-size:13px">${r.c.icon} ${esc(r.c.name)}</span>
-            <span class="num" style="font-size:12.5px">${fmtShort(r.avg)}<span class="dim"> × ${r.times} за ${r.months} мес</span></span>
+            <span class="num" style="font-size:12.5px;white-space:nowrap">${fmtShort(r.avg)}<span class="dim"> × ${r.times} за ${r.months} мес</span></span>
           </div>`).join("")}`
         : `<div class="hint" style="margin-top:10px">Повторы ищутся по совпадающим суммам в разных месяцах — нужен второй месяц истории.</div>`}
     </div>`;
@@ -1148,10 +1299,18 @@ function viewStat() {
     return `<div class="card">
       <div class="eyebrow">Капитал по месяцам</div>
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:70px;display:block">
-        <path d="${area}" fill="rgba(47,191,176,.16)"/>
+        <path d="${area}" fill="rgba(58,140,90,.16)"/>
         ${lo < 0 ? `<line x1="0" x2="${W}" y1="${zeroY.toFixed(1)}" y2="${zeroY.toFixed(1)}" stroke="rgba(255,255,255,.22)" stroke-width=".4" stroke-dasharray="1.5 1.5"/>` : ""}
         <path d="${path}" fill="none" stroke="var(--turq)" stroke-width="1.1" stroke-linejoin="round"/>
-        ${xy.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="1.4" fill="${pts[i].v < 0 ? "var(--pom)" : "var(--turq2)"}"/>`).join("")}
+        ${/* Минус помечен не только цветом: точка крупнее и в светлом кольце,
+              плюс подпись в <title> — красный и зелёный при дейтеранопии почти совпадают. */
+          xy.map((p, i) => {
+            const neg = pts[i].v < 0;
+            return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${neg ? 2 : 1.4}"`
+              + ` fill="${neg ? "var(--pom)" : "var(--turq2)"}"`
+              + (neg ? ` stroke="var(--text)" stroke-width=".7"` : "")
+              + `><title>${MONTHS_SHORT[+pts[i].m.slice(5, 7) - 1]} · ${fmtShort(pts[i].v)}</title></circle>`;
+          }).join("")}
       </svg>
       <div class="pulse-legend">${pts.map(p => `<span>${MONTHS_SHORT[+p.m.slice(5, 7) - 1]}</span>`).join("")}</div>
       <div class="between" style="margin-top:8px">
@@ -1161,7 +1320,7 @@ function viewStat() {
     </div>`;
   })()}
 
-  ${top.length ? `<div class="card"><div class="eyebrow">Крупнейшие траты месяца</div>${top.map(txRow).join("")}</div>` : ""}`;
+  ${top.length ? `<div class="card"><div class="eyebrow">Крупнейшие траты месяца</div>${top.map(t => txRow(t)).join("")}</div>` : ""}`;
 }
 
 /* ---------------- Цели ---------------- */
@@ -1185,7 +1344,7 @@ function viewGoals() {
     if (g.deadline && rest > 0) {
       const dl = new Date(g.deadline), now = new Date();
       const k = Math.max(1, Math.round((dl - now) / 2629800000));
-      need = `Чтобы успеть к ${g.deadline}: ${fmtShort(rest / k)} в месяц`;
+      need = `Чтобы успеть к ${fmtDate(g.deadline)}: ${fmtShortCur((g.cur === "USD" ? rest / rate() : rest) / k, g.cur)} в месяц`;
     }
     return `<div class="card">
       <div class="between"><b style="font-size:16px">${esc(g.name)}</b>
@@ -1196,7 +1355,7 @@ function viewGoals() {
       </div>
       <div class="bar gold"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
       <div class="between" style="margin-top:7px">
-        <span class="dim" style="font-size:12px">${Math.round(p * 100)}% · осталось ${fmtShort(rest)}</span>
+        <span class="dim" style="font-size:12px">${Math.round(p * 100)}% · осталось ${fmtShortCur(g.cur === "USD" ? rest / rate() : rest, g.cur)}</span>
         <span class="dim num" style="font-size:12px">${eta}</span></div>
       ${need ? `<div class="hint">${esc(need)}</div>` : ""}
       <button class="btn sm" data-act="add" data-kind="goal" data-goal="${g.id}" style="margin-top:11px">Пополнить</button>
@@ -1205,7 +1364,7 @@ function viewGoals() {
 
   return `
   <div class="card">
-    <div class="eyebrow">Подушка безопасности</div>
+    <div class="eyebrow">Запас прочности</div>
     ${safetyBlock(ae, pace)}
   </div>
   ${active.map(cardOf).join("") || `<div class="card"><div class="empty">Целей пока нет. Добавь первую — квартира, машина, резерв, отпуск.</div></div>`}
@@ -1297,7 +1456,7 @@ function viewIncome() {
 
   <div class="grid2">
     <div class="card tight"><div class="eyebrow">Личный рекорд</div>
-      <div class="num mid sf">${fmtShort(record)}</div>
+      <div class="num mid">${fmtShort(record)}</div>
       <div class="hint">${recMonth && record > 0 ? monthName(recMonth.m) : "—"}</div></div>
     <div class="card tight"><div class="eyebrow">Средний за 3 мес</div>
       <div class="num mid">${fmtShort(avg3)}</div>
@@ -1313,7 +1472,7 @@ function viewIncome() {
   ${target > 0 ? `<div class="card">
     <div class="eyebrow">Лестница уровней</div>
     <div class="lvl">${LV.map((l, i) => `<i class="${i < reached ? "on" : ""}"></i>`).join("")}</div>
-    <div class="pulse-legend" style="margin-top:6px">${LV.map(l => `<span>${l[0]}</span>`).join("")}</div>
+    <div class="pulse-legend" style="margin-top:6px">${LV.map((l, i) => `<span class="${i === reached - 1 ? "lvl-now" : ""}">${l[0]}</span>`).join("")}</div>
     <div class="hint" style="margin-top:8px">${reached ? `Текущий уровень — <b>${LV[reached - 1][0]}</b>. ` : "Пока ниже первого уровня. "}${next ? `Следующий — <b>${next[0]}</b> при среднем доходе ${fmtShort(target * next[1])} в месяц, это ещё +${fmtShort(target * next[1] - avg3)}.` : "Верхний уровень взят."}</div>
   </div>` : ""}
 
@@ -1392,12 +1551,14 @@ function viewSettings() {
   <div class="card">
     <div class="eyebrow">Основное</div>
     <label class="f">Курс доллара, сум за $1</label>
-    <input class="inp" type="number" inputmode="numeric" data-set="rate" value="${S.settings.rate}">
+    <input class="inp" type="number" inputmode="numeric" data-set="rate" data-echo="1" value="${S.settings.rate}">
+    <div class="echo num">${nf0.format(+S.settings.rate || 0)}</div>
     <label class="f">Цель по доходу в месяц, сум</label>
-    <input class="inp" type="number" inputmode="numeric" data-set="incomeTarget" value="${S.settings.incomeTarget}">
+    <input class="inp" type="number" inputmode="numeric" data-set="incomeTarget" data-echo="1" value="${S.settings.incomeTarget}">
+    <div class="echo num">${nf0.format(+S.settings.incomeTarget || 0)}</div>
     <label class="f">Рабочих часов в месяц</label>
     <input class="inp" type="number" inputmode="numeric" data-set="hours" value="${S.settings.hours}">
-    <label class="f">Подушка безопасности, месяцев расходов</label>
+    <label class="f">Запас прочности, месяцев расходов</label>
     <input class="inp" type="number" inputmode="numeric" data-set="safety" value="${S.settings.safety}">
     <label class="f">Налог на доход, %</label>
     <input class="inp" type="number" inputmode="numeric" data-set="tax" value="${S.settings.tax}">
@@ -1839,6 +2000,11 @@ document.addEventListener("change", e => {
 });
 document.addEventListener("input", e => {
   if (e.target.dataset.setD && draft && e.target.dataset.setD === "note") draft.note = e.target.value;
+  /* Эхо считаем прямо при вводе: перерисовка экрана съела бы фокус и каретку */
+  if (e.target.dataset.echo) {
+    const echo = e.target.nextElementSibling;
+    if (echo && echo.classList.contains("echo")) echo.textContent = nf0.format(+e.target.value || 0);
+  }
 });
 $("fab").addEventListener("click", () => { draft = newDraft("expense"); sheetEntry(); });
 $("sheet").addEventListener("click", e => { if (e.target.id === "sheet") closeSheet(); });
@@ -1848,10 +2014,11 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeSheet()
    Старт
    ========================================================== */
 (async function init() {
-  /* Офлайн-режим: только на настоящем https-адресе (на file:// и content:// SW недоступен) */
+  /* Офлайн-режим: только там, где Service Worker вообще доступен —
+     это https и localhost. На file:// и content:// его нет. */
   try {
-    if (typeof navigator !== "undefined" && navigator.serviceWorker &&
-        typeof location !== "undefined" && location.protocol === "https:") {
+    if (typeof navigator !== "undefined" && navigator.serviceWorker && typeof location !== "undefined" &&
+        (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
   } catch (e) {}

@@ -3,21 +3,36 @@
    обновление подтягивается в фоне и применяется при следующем запуске.
    При правке index.html поднимай номер версии, иначе старая копия
    может задержаться у уже установленных клиентов на один запуск. */
-const VERSION = "fin-v8";
+const VERSION = "fin-v10";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
-  "./apple-touch-icon.png"
+  "./apple-touch-icon.png",
+  /* Шрифты лежат на своём домене специально: обработчик fetch ниже
+     пропускает всё чужое, поэтому через CDN они офлайн не работали. */
+  "./fonts/inter-latin.woff2",
+  "./fonts/inter-cyrillic.woff2",
+  "./fonts/unbounded-latin.woff2",
+  "./fonts/unbounded-cyrillic.woff2",
+  "./fonts/mono-latin.woff2",
+  "./fonts/mono-cyrillic.woff2"
 ];
 
 self.addEventListener("install", e => {
+  /* Каждый файл кладём в кэш отдельно. У addAll всё или ничего: одна
+     опечатка в имени или один отсутствующий файл молча оставляли кэш
+     пустым, и приложение переставало работать офлайн, ничего не сообщив. */
   e.waitUntil(
     caches.open(VERSION)
-      .then(c => c.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+      .then(c => Promise.allSettled(ASSETS.map(a => c.add(a))))
+      .then(res => {
+        const lost = res.map((r, i) => r.status === "rejected" ? ASSETS[i] : null).filter(Boolean);
+        if (lost.length) console.warn("sw: не попали в кэш —", lost.join(", "));
+        return self.skipWaiting();
+      })
       .catch(() => self.skipWaiting())
   );
 });
