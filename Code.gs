@@ -57,6 +57,7 @@ function doGet(e) {
     return json_({
       ok: true,
       now: peek_(),
+      rates: rates_(),
       tx: rowsSince_(TX_SHEET, TX_COLS, TX_TEXT, since),
       dict: rowsSince_(DICT_SHEET, DICT_COLS, DICT_TEXT, since)
     });
@@ -81,6 +82,69 @@ function doPost(e) {
   } finally {
     try { lock.releaseLock(); } catch (e2) {}
   }
+}
+
+/* ---------------------------------------------------------
+   Курсы валют
+   --------------------------------------------------------- */
+/* Валюты, которые нужны приложению. Базовая — сум, её в списке нет. */
+var RATE_CURS = ['USD', 'KZT'];
+var RATE_URL = 'https://cbu.uz/ru/arkhiv-kursov-valyut/json/';
+
+/**
+ * Курсы к суму от ЦБ Узбекистана, не чаще одного раза в сутки.
+ *
+ * Тянет их СКРИПТ, а не приложение, намеренно: у страницы строгий CSP
+ * (`connect-src 'self' + script.google.com`), и добавлять туда сторонний
+ * домен значило бы и открывать дыру в политике, и отдавать IP телефона
+ * чужому серверу при каждом запуске. Здесь же запрос уходит один раз
+ * в сутки с сервера Google, а все устройства получают одинаковый курс
+ * вместе с обычным обменом.
+ *
+ * Кэш и «дата последней попытки» хранятся отдельно: если ЦБ недоступен,
+ * повторных попыток в этот день не будет, но старый курс останется
+ * рабочим, а не обнулится.
+ */
+function rates_() {
+  var p = PropertiesService.getScriptProperties();
+  var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  var cached = p.getProperty('RATES_JSON');
+  if (p.getProperty('RATES_TRIED') === today && cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
+  var out = null;
+  try {
+    var res = UrlFetchApp.fetch(RATE_URL, { muteHttpExceptions: true, followRedirects: true });
+    if (res.getResponseCode() === 200) {
+      var arr = JSON.parse(res.getContentText());
+      var map = {};
+      for (var i = 0; i < arr.length; i++) {
+        var row = arr[i], code = String(row.Ccy || '').toUpperCase();
+        if (RATE_CURS.indexOf(code) < 0) continue;
+        /* Nominal у ЦБ не всегда 1: для части валют курс указан за 10
+           или за 100 единиц. Делим, иначе ошибка ровно в номинал раз. */
+        var nominal = Number(row.Nominal) || 1;
+        var rate = Number(row.Rate) / nominal;
+        if (rate > 0) map[code] = Math.round(rate * 100) / 100;
+      }
+      if (Object.keys(map).length) {
+        out = { at: today, src: 'cbu.uz', rates: map };
+        p.setProperty('RATES_JSON', JSON.stringify(out));
+      }
+    }
+  } catch (e2) {
+    /* Сеть отвалилась — отдадим то, что лежит в кэше */
+  }
+  p.setProperty('RATES_TRIED', today);
+  if (out) return out;
+  if (cached) { try { return JSON.parse(cached); } catch (e3) {} }
+  return null;
+}
+
+/** Ручная проверка из редактора: пишет курсы в журнал */
+function checkRates() {
+  PropertiesService.getScriptProperties().deleteProperty('RATES_TRIED');
+  Logger.log(JSON.stringify(rates_()));
 }
 
 /* ---------------------------------------------------------

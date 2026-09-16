@@ -142,7 +142,7 @@ function buildFlat_(src) {
     'category', 'cat_kind', 'is_fixed', 'budget', 'account', 'currency',
     'amount', 'amount_uzs', 'goal_name', 'note'
   ]];
-  var KIND_RU = { expense: 'Расход', income: 'Доход', goal: 'В цель', transfer: 'Перевод' };
+  var KIND_RU = { expense: 'Расход', income: 'Доход', goal: 'В цель', transfer: 'Перевод', adjust: 'Сверка остатка' };
 
   src.tx.forEach(function (t) {
     var c = src.cats[t.cat] || {};
@@ -171,17 +171,22 @@ function buildFlat_(src) {
 function buildSpine_(src) {
   var out = [[
     'date', 'year_month', 'dow', 'is_weekend', 'expense_uzs', 'income_uzs',
-    'goal_uzs', 'is_zero_day', 'tx_count', 'cum_free', 'cum_capital'
+    'goal_uzs', 'adjust_uzs', 'is_zero_day', 'tx_count', 'cum_free', 'cum_capital'
   ]];
   if (!src.tx.length) return out;
 
   var byDay = {};
   src.tx.forEach(function (t) {
-    var d = byDay[t.date] || (byDay[t.date] = { e: 0, i: 0, g: 0, n: 0 });
+    var d = byDay[t.date] || (byDay[t.date] = { e: 0, i: 0, g: 0, a: 0, n: 0 });
     var v = uzs_(t, src.settings);
     if (t.kind === 'expense') d.e += v;
     else if (t.kind === 'income') d.i += v;
     else if (t.kind === 'goal') d.g += v;
+    /* Сверка остатка — знаковая поправка к свободным деньгам.
+       В расходы и доходы её класть нельзя: она не трата и не заработок,
+       а признание того, что учёт разошёлся с фактом. Отдельная колонка
+       нужна, чтобы cum_free сходился с остатком в приложении. */
+    else if (t.kind === 'adjust') d.a += v;
     d.n++;
   });
 
@@ -197,13 +202,13 @@ function buildSpine_(src) {
 
   while (cur <= end) {
     var key = Utilities.formatDate(cur, TZ_REPORT, 'yyyy-MM-dd');
-    var r = byDay[key] || { e: 0, i: 0, g: 0, n: 0 };
-    free += r.i - r.e - r.g;
+    var r = byDay[key] || { e: 0, i: 0, g: 0, a: 0, n: 0 };
+    free += r.i - r.e - r.g + r.a;
     pot += r.g;
     var dow = cur.getDay() === 0 ? 7 : cur.getDay();
     out.push([
       key, key.slice(0, 7), dow, dow >= 6 ? 1 : 0,
-      Math.round(r.e), Math.round(r.i), Math.round(r.g),
+      Math.round(r.e), Math.round(r.i), Math.round(r.g), Math.round(r.a),
       r.e === 0 ? 1 : 0, r.n, Math.round(free), Math.round(free + pot)
     ]);
     cur.setDate(cur.getDate() + 1);

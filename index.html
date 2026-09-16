@@ -158,7 +158,7 @@ hr.sep{border:0;border-top:1px solid var(--line);margin:10px 0}
 .ic{width:36px;height:36px;border-radius:11px;background:var(--ink3);display:grid;place-items:center;font-size:17px;flex:none}
 .li .t{flex:1;min-width:0}
 .li .t b{display:block;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.li .t span{font-size:12px;color:var(--dim)}
+.li .t span{font-size:12px;color:var(--dim);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .li .v{font-family:var(--fn);font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;white-space:nowrap}
 .daybar{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim);padding:12px 0 4px;letter-spacing:.02em}
 
@@ -251,9 +251,16 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 .badge{font-size:10.5px;padding:3px 7px;border-radius:7px;background:var(--ink3);color:var(--tx-2);font-weight:700}
 /* Бейдж-кнопка обязан дотягивать до 24×24 — минимум WCAG 2.2 (SC 2.5.8). */
 button.badge,.badge[data-act]{min-height:24px;padding:5px 9px;display:inline-flex;align-items:center;gap:4px}
+button.badge[disabled]{opacity:.32;pointer-events:none}
+/* Кнопки порядка: узкая пара стрелок, чтобы в строке помещались
+   и «сверить», и «···». Ширина под палец — 28 px при высоте 26. */
+.ord{display:flex;flex-direction:column;gap:2px;flex:none}
+.ord .badge{min-height:26px;width:28px;padding:0;justify-content:center;font-size:13px;line-height:1}
 .hint{font-size:12px;color:var(--dim);margin-top:6px}
 /* Эхо под полем: «18000000» без разделителей глазом не проверить */
 .echo{font-size:12px;color:var(--tx-2);margin-top:5px;letter-spacing:.02em;min-height:1em}
+input[type=checkbox]{width:24px;height:24px;accent-color:var(--pos-fill);flex:none}
+.inp[disabled]{opacity:.55}
 /* Три колонки вместо одной строки: «1,6 млн в мес · 19,2 млн в год»
    на 390 px рвалось так, что «в год» оставалось сиротой на второй строке. */
 .fx-head,.fx-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:baseline}
@@ -430,15 +437,18 @@ function defaults() {
   const ts = Date.now();
   /* seed — запись по умолчанию: при первом обмене с непустой таблицей такие сносятся,
      иначе на каждом новом устройстве появился бы свой комплект счетов и категорий */
-  const A = (name, cur, icon, opening) => ({ id: uid(), name, cur, icon, opening: opening || 0, updatedAt: ts, dirty: 1, seed: 1 });
-  const C = (name, kind, icon, fixed) => ({ id: uid(), name, kind, icon, fixed: !!fixed, budget: 0, updatedAt: ts, dirty: 1, seed: 1 });
+  let ai = 0, ci = 0, cj = 0;
+  const A = (name, cur, icon, opening) => ({ id: uid(), name, cur, icon, opening: opening || 0, sort: ai++, updatedAt: ts, dirty: 1, seed: 1 });
+  const C = (name, kind, icon, fixed) => ({ id: uid(), name, kind, icon, fixed: !!fixed, budget: 0,
+    sort: kind === "income" ? cj++ : ci++, updatedAt: ts, dirty: 1, seed: 1 });
   return {
     v: 1,
     /* sv (версию схемы) намеренно НЕ пишем здесь: defaults() шалловым
        слиянием подмешивается к загруженным настройкам, и метка версии
        из дефолтов сделала бы миграцию невидимой сама для себя.
        Ставит её только migrate(). */
-    settings: { rates: { USD: 12800, KZT: 24 }, incomeTarget: 0, hours: 176, safety: 6, tax: 12, updatedAt: ts, dirty: 1 },
+    settings: { rates: { USD: 12800, KZT: 24 }, autoRates: true, ratesAt: "", ratesSrc: "",
+      incomeTarget: 0, hours: 176, safety: 6, tax: 12, updatedAt: ts, dirty: 1 },
     accounts: [
       A("Наличные", "UZS", "💵"),
       A("Карта UZS", "UZS", "💳"),
@@ -509,7 +519,31 @@ const touch = o => { o.updatedAt = Date.now(); o.dirty = 1; return o; };
 /** Надгробие: простое удаление синхронизацию не переживает — запись вернулась бы с другого устройства */
 const bury = (type, id) => { S.trash[type + ":" + id] = { t: Date.now(), d: 1 }; };
 
-/* ---------- Справочники ---------- */
+/* ---------- Справочники ----------
+   Порядок счетов и категорий задаётся вручную полем sort: в списках
+   нужен тот порядок, в котором пользователь их держит в голове, а не
+   порядок создания. Поле едет в синхронизации внутри JSON записи,
+   схема таблицы не меняется. */
+const bySort = (a, b) => (+a.sort || 0) - (+b.sort || 0);
+/** Счета в пользовательском порядке */
+const accList = () => S.accounts.slice().sort(bySort);
+/** Категории заданного вида в пользовательском порядке */
+const catListOf = kind => S.cats.filter(c => c.kind === kind).sort(bySort);
+/** Сдвинуть запись на шаг вверх (-1) или вниз (+1) внутри своей группы */
+function moveInGroup(arr, id, step) {
+  const ord = arr.slice().sort(bySort);
+  const i = ord.findIndex(x => x.id === id);
+  const j = i + step;
+  if (i < 0 || j < 0 || j >= ord.length) return false;
+  /* Переписываем sort по всей группе: у записей из старых версий он
+     может совпадать или отсутствовать, и тогда обмен двух значений
+     ничего не двигает. */
+  const t = ord[i]; ord[i] = ord[j]; ord[j] = t;
+  ord.forEach((x, k) => { if (+x.sort !== k) { x.sort = k; touch(x); } });
+  return true;
+}
+
+
 const acc = id => S.accounts.find(a => a.id === id);
 const cat = id => S.cats.find(c => c.id === id);
 const goal = id => S.goals.find(g => g.id === id);
@@ -529,6 +563,11 @@ function balances() {
   S.tx.forEach(t => {
     if (t.kind === "income") m[t.acc] = (m[t.acc] || 0) + t.amount;
     else if (t.kind === "expense" || t.kind === "goal") m[t.acc] = (m[t.acc] || 0) - t.amount;
+    /* Корректировка — знаковая: плюс, если денег фактически больше,
+       минус, если меньше. В доходы и расходы месяца не попадает:
+       monthStats и catStats разбирают kind перечислением, и adjust
+       туда просто не входит — бюджет и аналитика остаются чистыми. */
+    else if (t.kind === "adjust") m[t.acc] = (m[t.acc] || 0) + t.amount;
     else if (t.kind === "transfer") {
       m[t.acc] = (m[t.acc] || 0) - t.amount;
       m[t.acc2] = (m[t.acc2] || 0) + (t.amount2 != null ? t.amount2 : t.amount);
@@ -664,6 +703,7 @@ function capitalAt(end) {
     if (t.date > end) return;
     if (t.kind === "income") m[t.acc] = (m[t.acc] || 0) + t.amount;
     else if (t.kind === "expense") m[t.acc] = (m[t.acc] || 0) - t.amount;
+    else if (t.kind === "adjust") m[t.acc] = (m[t.acc] || 0) + t.amount;
     else if (t.kind === "goal") { m[t.acc] = (m[t.acc] || 0) - t.amount; if (live[t.goal]) pot += toBase(t); }
     else if (t.kind === "transfer") {
       m[t.acc] = (m[t.acc] || 0) - t.amount;
@@ -746,17 +786,43 @@ function fixedCosts() {
 }
 
 /** Рост категорий месяц к месяцу; текущий месяц приводится к полному */
+/** Расходы по категориям за дни 1..day включительно */
+function catSumsUpto(m, day) {
+  const by = {};
+  S.tx.forEach(t => {
+    if (t.kind !== "expense" || ym(t.date) !== m) return;
+    if (+t.date.slice(8, 10) > day) return;
+    by[t.cat] = (by[t.cat] || 0) + toBase(t);
+  });
+  return by;
+}
+
+/**
+ * Рост категорий: одинаковые окна дней, а не месяц к месяцу.
+ *
+ * Было: текущий месяц приводился к полному умножением на dm/день.
+ * Аренда платится 5-го числа, к 16-му коэффициент 30/16 = 1,88 —
+ * и один и тот же платёж показывал рост +58%, хотя к концу месяца
+ * разница ноль. Экстраполяция врёт на любом расходе, привязанном
+ * к числу месяца: аренда, садик, связь, подписки.
+ *
+ * Стало: дни 1..N текущего месяца против дней 1..N предыдущего.
+ * N — сегодняшнее число для незакрытого месяца, иначе весь месяц.
+ * Окно урезается по короткому месяцу: 31 марта против февраля
+ * сравнивается по 28 дням с обеих сторон.
+ */
 function catGrowth(m) {
   const prev = shiftMonth(m, -1);
-  const a = {}, b = {};
-  catStats(prev).forEach(x => a[x.id] = x.sum);
-  catStats(m).forEach(x => b[x.id] = x.sum);
+  const isCur = m === ym(todayStr());
+  const day = Math.min(
+    isCur ? new Date().getDate() : daysInMonth(m),
+    daysInMonth(m), daysInMonth(prev)
+  );
+  const a = catSumsUpto(prev, day), b = catSumsUpto(m, day);
   if (!Object.keys(a).length) return null;
-  const dm = daysInMonth(m);
-  const k = m === ym(todayStr()) ? dm / Math.max(1, Math.min(dm, new Date().getDate())) : 1;
   const ids = Array.from(new Set(Object.keys(a).concat(Object.keys(b))));
-  return { k, rows: ids.map(id => {
-    const was = a[id] || 0, now = (b[id] || 0) * k;
+  return { day, full: !isCur && day === daysInMonth(m), rows: ids.map(id => {
+    const was = a[id] || 0, now = b[id] || 0;
     return { c: cat(id), was, now, delta: now - was, pct: was > 0 ? (now / was - 1) * 100 : null };
   }).filter(x => x.c && (x.was || x.now)).sort((x, y) => y.delta - x.delta) };
 }
@@ -939,6 +1005,34 @@ const SYNC = {
     return this.pending;
   },
 
+  /**
+   * Курсы приходят в ответе скрипта, потому что сама страница наружу
+   * не ходит: у неё CSP без сторонних доменов и обещание «внешних
+   * запросов нет». Скрипт дёргает ЦБ Узбекистана раз в сутки.
+   * Ручной режим уважается: если автообновление выключено, курс
+   * не трогаем.
+   */
+  applyRates(pull) {
+    const r = pull && pull.rates;
+    if (!r || !r.rates || S.settings.autoRates === false) return false;
+    let changed = false;
+    S.settings.rates = S.settings.rates || {};
+    CURS.forEach(c => {
+      if (c === BASE) return;
+      const v = +r.rates[c];
+      if (v > 0 && +S.settings.rates[c] !== v) { S.settings.rates[c] = v; changed = true; }
+    });
+    if (!changed && S.settings.ratesAt === r.at) return false;
+    S.settings.ratesAt = r.at || todayStr();
+    S.settings.ratesSrc = r.src || "";
+    S.settings.rate = +S.settings.rates.USD || 1;
+    /* Настройки менялись сервером, а не пользователем: dirty не ставим,
+       иначе каждое устройство погонит один и тот же курс обратно в таблицу
+       и обмен зациклится на пустых правках. */
+    S.settings.updatedAt = Date.now();
+    return changed;
+  },
+
   /** Забрать чужое, слить, отдать своё. Курсор двигается только при успехе. */
   async cycle() {
     const since = Number(S.sync.lastSync) || 0;
@@ -948,6 +1042,7 @@ const SYNC = {
       if (!pull || !pull.ok) throw new Error((pull && pull.error) || "нет ответа");
       const got = this.merge(pull);
       if (firstRun) this.dropSeed(pull);
+      this.applyRates(pull);
 
       const payload = this.collect();
       let sent = 0;
@@ -1144,7 +1239,7 @@ function viewHome() {
       return used.length ? " · курс " + used.map(c => nf0.format(rateOf(c)) + " за 1" + CUR[c].sym).join(", ") : "";
     })()}</div>
     <hr class="sep">
-    ${S.accounts.map(a => `<div class="between" style="padding:4px 0">
+    ${accList().map(a => `<div class="between" style="padding:4px 0">
         <span class="dim" style="font-size:13px">${a.icon || "•"} ${esc(a.name)}</span>
         <span class="num" style="font-weight:600;font-size:14px">${fmt(bals[a.id] || 0, a.cur)}</span>
       </div>`).join("")}
@@ -1210,6 +1305,10 @@ function txRow(t, showDate) {
   let icon = c ? c.icon : "•", title = c ? c.name : "Операция", sign = "−", cls = "";
   if (t.kind === "income") { sign = "+"; cls = "tq"; }
   else if (t.kind === "transfer") { icon = "⇄"; title = "Перевод"; sign = ""; cls = "lz"; }
+  else if (t.kind === "adjust") {
+    icon = "⚖"; title = "Сверка остатка";
+    sign = t.amount < 0 ? "−" : "+"; cls = "dim";
+  }
   else if (t.kind === "goal") {
     const g = goal(t.goal); icon = "◎";
     if (t.amount < 0) { title = "Возврат из «" + (g ? g.name : "цели") + "»"; sign = "←"; cls = "tq"; }
@@ -1342,8 +1441,10 @@ function viewStat() {
           <b class="${r.delta > 0 ? "pm" : "tq"}" style="margin-left:7px">${r.delta > 0 ? "+" : "−"}${r.pct == null ? fmtShort(Math.abs(r.delta)) : Math.abs(r.pct).toFixed(0) + "%"}</b></span>
       </div>`;
     return `<div class="card">
-      <div class="eyebrow">Рост категорий к прошлому месяцу</div>
-      ${G.k > 1.02 ? `<div class="hint" style="margin:0 0 6px">Текущий месяц приведён к полному (×${dec(G.k, 2)}), иначе сравнение было бы не в пользу незакрытого месяца.</div>` : ""}
+      <div class="between" style="margin-bottom:8px">
+        <div class="eyebrow" style="margin:0">Рост категорий к прошлому месяцу</div>
+        <span class="badge">${G.full ? "весь месяц" : "1–" + G.day + " числа"}</span></div>
+      ${G.full ? "" : `<div class="hint" style="margin:0 0 6px">Сравниваются первые ${G.day} ${plural(G.day, "день", "дня", "дней")} обоих месяцев — иначе платёж по числу (аренда, садик, связь) давал бы мнимый рост.</div>`}
       ${up.map(line).join("") || `<div class="hint">Растущих категорий нет.</div>`}
       ${down.length ? `<div class="eyebrow" style="margin:12px 0 0">Снизились</div>${down.map(line).join("")}` : ""}
     </div>`;
@@ -1663,9 +1764,18 @@ function viewSettings() {
   return `
   <div class="card">
     <div class="eyebrow">Основное</div>
+    <div class="between" style="margin:2px 0 4px">
+      <span style="font-size:13.5px">Обновлять курсы автоматически</span>
+      <input type="checkbox" data-set-chk="autoRates" ${S.settings.autoRates === false ? "" : "checked"}>
+    </div>
+    <div class="hint" style="margin-top:0">${S.settings.autoRates === false
+      ? "Курсы правишь руками — приложение их не меняет."
+      : "Курс ЦБ Узбекистана приходит вместе с обменом, раз в сутки. Наружу ходит скрипт, не телефон."
+        + (S.settings.ratesAt ? " Обновлено " + fmtDate(S.settings.ratesAt) + "." : SYNC.configured() ? " Ещё ни разу не приходил." : " Нужна настроенная синхронизация.")}</div>
     ${CURS.filter(c => c !== BASE).map(c => `
       <label class="f">Курс ${CUR[c].gen}, сум за 1${CUR[c].sym}</label>
-      <input class="inp" type="number" inputmode="decimal" step="any" data-set-rate="${c}" data-echo="1" value="${rateOf(c)}">
+      <input class="inp" type="number" inputmode="decimal" step="any" data-set-rate="${c}" data-echo="1"
+             value="${rateOf(c)}" ${S.settings.autoRates === false ? "" : "disabled"}>
       <div class="echo num">1${CUR[c].sym} = ${nf0.format(rateOf(c))} сум</div>`).join("")}
     <label class="f">Цель по доходу в месяц, сум</label>
     <input class="inp" type="number" inputmode="numeric" data-set="incomeTarget" data-echo="1" value="${S.settings.incomeTarget}">
@@ -1682,20 +1792,29 @@ function viewSettings() {
   <div class="card">
     <div class="between"><div class="eyebrow" style="margin:0">Счета</div>
       <button class="badge" data-act="acc-new">добавить</button></div>
-    ${S.accounts.map(a => `<div class="li">
+    ${(() => { const L = accList(), bal = balances(); return L.map((a, i) => `<div class="li">
       <div class="ic">${a.icon || "•"}</div>
-      <div class="t"><b>${esc(a.name)}</b><span>${a.cur} · начальный остаток ${fmt(a.opening, a.cur)}</span></div>
-      <button class="badge" data-act="acc-edit" data-id="${a.id}">···</button></div>`).join("")}
+      <div class="t"><b>${esc(a.name)}</b><span class="num">${fmt(bal[a.id] || 0, a.cur)}</span></div>
+      <div class="ord">
+        <button class="badge" data-act="acc-up" data-id="${a.id}" aria-label="Выше" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="badge" data-act="acc-down" data-id="${a.id}" aria-label="Ниже" ${i === L.length - 1 ? "disabled" : ""}>↓</button>
+      </div>
+      <button class="badge" data-act="acc-reconcile" data-id="${a.id}">сверить</button>
+      <button class="badge" data-act="acc-edit" data-id="${a.id}">···</button></div>`).join(""); })()}
   </div>
 
   <div class="card">
     <div class="between"><div class="eyebrow" style="margin:0">Категории расходов и бюджет</div>
       <button class="badge" data-act="cat-new" data-kind="expense">добавить</button></div>
-    ${S.cats.filter(c => c.kind === "expense").map(c => `<div class="li">
+    ${(() => { const L = catListOf("expense"); return L.map((c, i) => `<div class="li">
       <div class="ic">${c.icon || "•"}</div>
       <div class="t"><b>${esc(c.name)}${c.fixed ? ` <span class="badge">обяз.</span>` : ""}</b>
         <span>${+c.budget ? "лимит " + fmtShort(c.budget) + " в месяц" : "лимит не задан"}</span></div>
-      <button class="badge" data-act="cat-edit" data-id="${c.id}">···</button></div>`).join("")}
+      <div class="ord">
+        <button class="badge" data-act="cat-up" data-id="${c.id}" aria-label="Выше" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="badge" data-act="cat-down" data-id="${c.id}" aria-label="Ниже" ${i === L.length - 1 ? "disabled" : ""}>↓</button>
+      </div>
+      <button class="badge" data-act="cat-edit" data-id="${c.id}">···</button></div>`).join(""); })()}
     <div class="between" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line)">
       <span class="dim" style="font-size:12.5px">Всего лимитов</span>
       <span class="num" style="font-weight:700">${fmtShort(budgetTotal())}</span></div>
@@ -1704,9 +1823,13 @@ function viewSettings() {
   <div class="card">
     <div class="between"><div class="eyebrow" style="margin:0">Категории доходов</div>
       <button class="badge" data-act="cat-new" data-kind="income">добавить</button></div>
-    ${S.cats.filter(c => c.kind === "income").map(c => `<div class="li">
+    ${(() => { const L = catListOf("income"); return L.map((c, i) => `<div class="li">
       <div class="ic">${c.icon || "•"}</div><div class="t"><b>${esc(c.name)}</b></div>
-      <button class="badge" data-act="cat-edit" data-id="${c.id}">···</button></div>`).join("")}
+      <div class="ord">
+        <button class="badge" data-act="cat-up" data-id="${c.id}" aria-label="Выше" ${i === 0 ? "disabled" : ""}>↑</button>
+        <button class="badge" data-act="cat-down" data-id="${c.id}" aria-label="Ниже" ${i === L.length - 1 ? "disabled" : ""}>↓</button>
+      </div>
+      <button class="badge" data-act="cat-edit" data-id="${c.id}">···</button></div>`).join(""); })()}
   </div>
 
   <div class="card">
@@ -1773,16 +1896,10 @@ const draftVal = () => { const v = parseFloat(String(draft.buf).replace(",", "."
 function sheetEntry() {
   const c = draftCur();
   const shown = draft.buf === "" ? "0" : draft.buf;
-  /* Частые категории вперёд: список из 16 штук в алфавитном порядке
-     заставлял скроллить до нужной. Порядок внутри одинаковой частоты
-     сохраняется авторский, поэтому список не перетасовывается на ровном месте. */
-  const useCount = {};
-  S.tx.forEach(t => { if (t.cat) useCount[t.cat] = (useCount[t.cat] || 0) + 1; });
-  const catList = S.cats
-    .map((x, i) => ({ x, i }))
-    .filter(o => o.x.kind === (draft.kind === "income" ? "income" : "expense"))
-    .sort((a, b) => (useCount[b.x.id] || 0) - (useCount[a.x.id] || 0) || a.i - b.i)
-    .map(o => o.x);
+  /* Порядок ручной (поле sort). При первом запуске новой версии migrate()
+     раскладывает его по частоте использования, дальше решает пользователь:
+     явно выставленный порядок важнее угаданного. */
+  const catList = catListOf(draft.kind === "income" ? "income" : "expense");
   const KINDS = [["expense", "Расход"], ["income", "Доход"], ["transfer", "Перевод"], ["goal", "В цель"]];
 
   openSheet(`
@@ -1802,9 +1919,9 @@ function sheetEntry() {
 
     ${draft.kind === "transfer" ? `
       <label class="f">Откуда</label>
-      <select class="inp" data-set-d="acc">${S.accounts.map(a => `<option value="${a.id}" ${a.id === draft.acc ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
+      <select class="inp" data-set-d="acc">${accList().map(a => `<option value="${a.id}" ${a.id === draft.acc ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
       <label class="f">Куда</label>
-      <select class="inp" data-set-d="acc2">${S.accounts.map(a => `<option value="${a.id}" ${a.id === draft.acc2 ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
+      <select class="inp" data-set-d="acc2">${accList().map(a => `<option value="${a.id}" ${a.id === draft.acc2 ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
       ${(acc(draft.acc) || {}).cur !== (acc(draft.acc2) || {}).cur ? `
         <label class="f">Сколько зачислено (${(acc(draft.acc2) || {}).cur})</label>
         <input class="inp" type="number" inputmode="decimal" data-set-d="amount2" value="${draft.amount2 != null ? draft.amount2 : ""}" placeholder="по курсу автоматически">` : ""}
@@ -1812,12 +1929,12 @@ function sheetEntry() {
       <label class="f">Цель</label>
       <select class="inp" data-set-d="goal">${S.goals.filter(g => !g.done).map(g => `<option value="${g.id}" ${g.id === draft.goal ? "selected" : ""}>${esc(g.name)}</option>`).join("") || `<option value="">Сначала создай цель</option>`}</select>
       <label class="f">Со счёта</label>
-      <select class="inp" data-set-d="acc">${S.accounts.map(a => `<option value="${a.id}" ${a.id === draft.acc ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
+      <select class="inp" data-set-d="acc">${accList().map(a => `<option value="${a.id}" ${a.id === draft.acc ? "selected" : ""}>${esc(a.name)} (${a.cur})</option>`).join("")}</select>
     ` : `
       <label class="f">Категория</label>
       <div class="chips">${catList.map(x => `<button class="chip ${x.id === draft.cat ? "on" : ""}" data-act="cat" data-id="${x.id}">${x.icon} ${esc(x.name)}</button>`).join("")}</div>
       <label class="f">Счёт</label>
-      <div class="chips">${S.accounts.map(a => `<button class="chip sm ${a.id === draft.acc ? "on" : ""}" data-act="acc" data-id="${a.id}">${a.icon} ${esc(a.name)}</button>`).join("")}</div>
+      <div class="chips">${accList().map(a => `<button class="chip sm ${a.id === draft.acc ? "on" : ""}" data-act="acc" data-id="${a.id}">${a.icon} ${esc(a.name)}</button>`).join("")}</div>
     `}
 
     <label class="f">Дата</label>
@@ -1872,6 +1989,52 @@ function saveTx() {
   toast(isEdit ? "Изменения сохранены" : "Записано");
 }
 
+/** Карточка уже записанной сверки: посмотреть и отменить */
+function sheetAdjust(t) {
+  const a = acc(t.acc);
+  openSheet(`<div class="grab"></div>
+    <div class="eyebrow">Сверка остатка</div>
+    <div class="amount"><div class="v ${t.amount < 0 ? "pm" : "tq"}">${t.amount < 0 ? "−" : "+"}${nf0.format(Math.abs(Math.round(t.amount)))}<span style="font-size:20px;color:var(--dim)"> ${curInfo(t.cur).sym}</span></div>
+      <div class="c">${fmtDate(t.date)} · ${esc(a ? a.name : "счёт удалён")}</div></div>
+    ${t.note ? `<div class="hint" style="text-align:center">${esc(t.note)}</div>` : ""}
+    <div class="hint">Эта операция только поправила остаток счёта. В доходах, расходах
+      и бюджете месяца её нет. Если разница была записана по ошибке — отмени её,
+      остаток вернётся к расчётному.</div>
+    <div class="sheet-actions">
+      <button class="btn ghost" data-act="close">Закрыть</button>
+      <button class="btn danger" data-act="del-tx" data-id="${t.id}">Отменить сверку</button>
+    </div>`);
+}
+
+/**
+ * Сверка остатка. Разница между фактом и расчётом пишется отдельной
+ * операцией, а не правкой начального остатка: в журнале видно, когда
+ * и на сколько разошлось, правку можно отменить, и статистика месяца
+ * при этом не искажается.
+ */
+function sheetReconcile(accId) {
+  const a = acc(accId); if (!a) return;
+  const calc = balances()[a.id] || 0;
+  openSheet(`<div class="grab"></div>
+    <div class="eyebrow">Сверка остатка</div>
+    <div class="row" style="margin:4px 0 12px"><div class="ic">${a.icon || "•"}</div>
+      <div class="t"><b style="font-size:16px">${esc(a.name)}</b>
+        <span class="dim" style="font-size:12.5px">по расчёту ${fmt(calc, a.cur)}</span></div></div>
+    <label class="f">Сколько на самом деле</label>
+    <input class="inp num" id="rc_val" type="number" inputmode="decimal" step="any"
+           value="${a.cur === "USD" ? calc.toFixed(2) : Math.round(calc)}" data-rc="${a.id}">
+    <div class="echo num" id="rc_diff">разница 0</div>
+    <label class="f">Комментарий</label>
+    <input class="inp" id="rc_note" placeholder="забыл записать приход, потерял чек…">
+    <div class="hint">Разница ляжет отдельной операцией «Сверка остатка» на сегодня.
+      В доходы, расходы и бюджет месяца она не попадёт — только поправит остаток счёта.</div>
+    <div class="sheet-actions">
+      <button class="btn ghost" data-act="close">Отмена</button>
+      <button class="btn" data-act="rc-save" data-id="${a.id}">Записать разницу</button>
+    </div>`);
+  setTimeout(() => { const i = $("rc_val"); if (i) { i.focus(); i.select(); } }, 60);
+}
+
 /* ---------- Шторки справочников ---------- */
 function sheetGoal(id) {
   const g = id ? goal(id) : { id: null, name: "", target: "", cur: BASE, deadline: "", initial: 0, done: false };
@@ -1893,7 +2056,7 @@ function sheetGoal(id) {
       <hr class="sep">
       <div class="eyebrow">Вернуть деньги на счёт</div>
       <div class="hint" style="margin:0 0 8px">В цели лежит ${fmtShort(goalNet(id))}. Возврат вернёт всю сумму на выбранный счёт.</div>
-      <select class="inp" id="g_back_acc">${S.accounts.map(a => `<option value="${a.id}">${esc(a.name)} (${a.cur})</option>`).join("")}</select>
+      <select class="inp" id="g_back_acc">${accList().map(a => `<option value="${a.id}">${esc(a.name)} (${a.cur})</option>`).join("")}</select>
       <button class="btn ghost sm" data-act="goal-return" data-id="${id}" style="margin-top:9px">Вернуть на счёт</button>
     ` : ""}
     <div style="height:14px"></div>
@@ -1975,7 +2138,14 @@ document.addEventListener("click", e => {
     case "close": closeSheet(); break;
 
     case "add": draft = newDraft(el.dataset.kind, el.dataset.goal ? { goal: el.dataset.goal } : null); sheetEntry(); break;
-    case "edit": { const t = S.tx.find(x => x.id === id); if (t) { draft = draftFromTx(t); sheetEntry(); } break; }
+    case "edit": {
+      const t = S.tx.find(x => x.id === id); if (!t) break;
+      /* Сверку остатка редактировать нечего: сумма в ней — следствие
+         расхождения, а не введённая величина. Её либо отменяют,
+         либо делают новую сверку. */
+      if (t.kind === "adjust") { sheetAdjust(t); break; }
+      draft = draftFromTx(t); sheetEntry(); break;
+    }
     case "kind": draft.kind = el.dataset.k;
       if (draft.kind !== "transfer" && draft.kind !== "goal") {
         const c = cat(draft.cat);
@@ -1996,8 +2166,14 @@ document.addEventListener("click", e => {
     case "date-today": draft.date = todayStr(); sheetEntry(); break;
     case "date-yest": draft.date = shiftDay(todayStr(), -1); sheetEntry(); break;
     case "save-tx": saveTx(); break;
-    case "del-tx": bury("tx", draft.id); S.tx = S.tx.filter(x => x.id !== draft.id);
+    case "del-tx": {
+      /* Кнопка приходит и из шторки ввода (там есть draft), и из карточки
+         сверки (там draft пустой, id стоит на самой кнопке) */
+      const tid = id || (draft && draft.id);
+      if (!tid) break;
+      bury("tx", tid); S.tx = S.tx.filter(x => x.id !== tid);
       save(); closeSheet(); render(); toast("Удалено"); break;
+    }
 
     case "goal-new": sheetGoal(null); break;
     case "goal-edit": sheetGoal(id); break;
@@ -2044,10 +2220,48 @@ document.addEventListener("click", e => {
       bury("goal", id); S.goals = S.goals.filter(g => g.id !== id); save(); closeSheet(); render(); break;
     }
 
+    case "acc-up": case "acc-down":
+      if (moveInGroup(S.accounts, id, a === "acc-up" ? -1 : 1)) { save(); render(); }
+      break;
+    case "cat-up": case "cat-down": {
+      const c = cat(id); if (!c) break;
+      /* Двигаем внутри своего вида: расходные и доходные категории —
+         две независимые группы, у каждой своя нумерация sort */
+      if (moveInGroup(S.cats.filter(x => x.kind === c.kind), id, a === "cat-up" ? -1 : 1)) { save(); render(); }
+      break;
+    }
+    case "acc-reconcile": sheetReconcile(id); break;
+    case "rc-save": {
+      const a = acc(id); if (!a) break;
+      const el2 = $("rc_val");
+      if (!el2 || el2.value === "") { toast("Введи фактический остаток"); break; }
+      const calc = balances()[a.id] || 0;
+      const fact = +el2.value;
+      if (!isFinite(fact)) { toast("Не похоже на сумму"); break; }
+      /* Округление до копейки/сума: иначе разница 0,0000001 создаёт
+         операцию-пустышку на каждой сверке */
+      const step = a.cur === "USD" ? 100 : 1;
+      const diff = Math.round((fact - calc) * step) / step;
+      if (diff === 0) { toast("Расхождений нет"); closeSheet(); break; }
+      const note = ($("rc_note") && $("rc_note").value || "").trim();
+      S.tx.push({
+        id: uid(), kind: "adjust", date: todayStr(), amount: diff,
+        cur: a.cur, rate: rateOf(a.cur), acc: a.id,
+        note: note || "сверка остатка", updatedAt: Date.now(), dirty: 1
+      });
+      save(); closeSheet(); render();
+      toast(diff > 0 ? "Добавлено " + fmt(diff, a.cur) : "Списано " + fmt(-diff, a.cur));
+      break;
+    }
     case "acc-new": sheetAcc(null); break;
     case "acc-edit": sheetAcc(id); break;
     case "acc-save": {
-      const o = { id: id || uid(), name: ($("a_name").value || "Счёт").trim(), icon: $("a_icon").value || "•", cur: $("a_cur").value, opening: +$("a_open").value || 0, updatedAt: Date.now(), dirty: 1 };
+      const prev = id ? acc(id) : null;
+      const o = { id: id || uid(), name: ($("a_name").value || "Счёт").trim(), icon: $("a_icon").value || "•", cur: $("a_cur").value, opening: +$("a_open").value || 0,
+        /* sort переносим из прежней записи: объект собирается заново,
+           и без этой строки правка названия сбрасывала порядок в конец */
+        sort: prev && +prev.sort >= 0 ? +prev.sort : S.accounts.length,
+        updatedAt: Date.now(), dirty: 1 };
       const i = S.accounts.findIndex(x => x.id === o.id);
       if (i >= 0) S.accounts[i] = o; else S.accounts.push(o);
       save(); closeSheet(); render(); break;
@@ -2064,6 +2278,7 @@ document.addEventListener("click", e => {
         id: id || uid(), name: ($("c_name").value || "Категория").trim(), icon: $("c_icon").value || "•", kind,
         budget: kind === "expense" ? (+$("c_bud").value || 0) : 0,
         fixed: kind === "expense" ? $("c_fix").checked : false,
+        sort: (() => { const pv = id ? cat(id) : null; return pv && +pv.sort >= 0 ? +pv.sort : S.cats.length; })(),
         updatedAt: Date.now(), dirty: 1
       };
       const i = S.cats.findIndex(x => x.id === o.id);
@@ -2101,6 +2316,16 @@ document.addEventListener("change", e => {
   if (el.dataset.setS) {
     S.sync[el.dataset.setS] = (el.value || "").trim();
     S.sync.status = ""; S.sync.err = ""; S.sync.fails = 0; save(); render();
+    return;
+  }
+  if (el.dataset.setChk) {
+    S.settings[el.dataset.setChk] = !!el.checked;
+    S.settings.updatedAt = Date.now(); S.settings.dirty = 1;
+    save(); render();
+    if (el.dataset.setChk === "autoRates" && el.checked) {
+      toast("Курс придёт при следующем обмене");
+      SYNC.run().then(r => { if (r.ok) safeRender(); });
+    }
     return;
   }
   if (el.dataset.setRate) {
@@ -2148,6 +2373,16 @@ document.addEventListener("change", e => {
 document.addEventListener("input", e => {
   if (e.target.dataset.setD && draft && e.target.dataset.setD === "note") draft.note = e.target.value;
   /* Эхо считаем прямо при вводе: перерисовка экрана съела бы фокус и каретку */
+  if (e.target.dataset.rc) {
+    const a = acc(e.target.dataset.rc), out = $("rc_diff");
+    if (a && out) {
+      const d = (+e.target.value || 0) - (balances()[a.id] || 0);
+      out.textContent = Math.abs(d) < 1e-9 ? "расхождений нет"
+        : (d > 0 ? "не хватает в приложении " : "лишнее в приложении ") + fmt(Math.abs(d), a.cur);
+      out.style.color = Math.abs(d) < 1e-9 ? "var(--tx-2)" : d > 0 ? "var(--pos)" : "var(--neg)";
+    }
+    return;
+  }
   if (e.target.dataset.echo) {
     const echo = e.target.nextElementSibling;
     if (!echo || !echo.classList.contains("echo")) return;
@@ -2205,6 +2440,24 @@ function migrate() {
     if (!r.updatedAt) r.updatedAt = now;
     if (neverSynced) r.dirty = 1;   // ничего ещё не уезжало — отдать всё
   }));
+  /* Порядок списков. У записей из прежних версий поля sort нет.
+     Счета получают номера по текущему порядку массива, категории —
+     по частоте использования: так список в шторке ввода открывается
+     сразу удобным, а дальше порядок правится руками и больше
+     не пересчитывается. */
+  if (!S.accounts.every(a => +a.sort >= 0)) {
+    S.accounts.forEach((a, i) => { if (!(+a.sort >= 0)) { a.sort = i; touch(a); } });
+  }
+  ["expense", "income"].forEach(kind => {
+    const grp = S.cats.filter(c => c.kind === kind);
+    if (grp.every(c => +c.sort >= 0)) return;
+    const use = {};
+    S.tx.forEach(t => { if (t.cat) use[t.cat] = (use[t.cat] || 0) + 1; });
+    grp.map((c, i) => ({ c, i }))
+      .sort((x, y) => (use[y.c.id] || 0) - (use[x.c.id] || 0) || x.i - y.i)
+      .forEach((o, k) => { if (+o.c.sort !== k) { o.c.sort = k; touch(o.c); } });
+  });
+
   /* Поля, добавленные позже старта: у ранних пользователей их нет,
      и в настройках рисуется value="undefined" */
   /* Курс доллара раньше лежал плоским полем settings.rate; теперь курсы
