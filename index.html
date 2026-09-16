@@ -363,9 +363,34 @@ const nf0 = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
 const nf2 = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 /* Единица отделяется неразрывным пробелом: иначе «14,8 млн» в узкой плитке
    переносится и «млн» уезжает на вторую строку, ломая сетку. */
+/* ==========================================================
+   Валюты. Базовая — сум: в ней считаются все агрегаты, бюджеты
+   и цели. Курс хранится как «сколько базовых единиц за 1 единицу
+   валюты», поэтому у операции достаточно одного поля rate — оно
+   так и заполнялось для доллара, схема таблицы не меняется.
+   ========================================================== */
+const BASE = "UZS";
+const CUR = {
+  UZS: { name: "Сум",    gen: "сума",    sym: "сум", dec: 0, pre: false },
+  USD: { name: "Доллар", gen: "доллара", sym: "$",   dec: 2, pre: true  },
+  KZT: { name: "Тенге",  gen: "тенге",   sym: "₸",   dec: 0, pre: false }
+};
+const CURS = Object.keys(CUR);
+const curInfo = c => CUR[c] || CUR[BASE];
+/** Курс валюты к базовой. Для базовой всегда 1. */
+function rateOf(c) {
+  if (!c || c === BASE) return 1;
+  const r = +(S.settings.rates || {})[c];
+  return r > 0 ? r : 1;
+}
+/** Селект валюты — один источник для счетов и целей */
+const curOptions = sel => CURS.map(c =>
+  `<option value="${c}" ${sel === c ? "selected" : ""}>${CUR[c].name} (${CUR[c].sym})</option>`).join("");
+
 function fmt(v, cur) {
-  if (cur === "USD") return "$" + nf2.format(v || 0);
-  return nf0.format(Math.round(v || 0)) + "\u00A0сум";
+  const c = curInfo(cur);
+  const num = c.dec === 2 ? nf2.format(v || 0) : nf0.format(Math.round(v || 0));
+  return c.pre ? c.sym + num : num + "\u00A0" + c.sym;
 }
 function fmtShort(v) {
   const a = Math.abs(v || 0), sign = v < 0 ? "−" : "";
@@ -378,7 +403,9 @@ function fmtShort(v) {
 const dec = (v, d) => (v || 0).toFixed(d).replace(".", ",");
 /** Короткая форма в нужной валюте: «38,0 млн» либо «$1 700» */
 function fmtShortCur(v, cur) {
-  return cur === "USD" ? "$" + nf0.format(Math.round(v || 0)) : fmtShort(v);
+  if (!cur || cur === BASE) return fmtShort(v);
+  const c = curInfo(cur), num = nf0.format(Math.round(v || 0));
+  return c.pre ? c.sym + num : num + "\u00A0" + c.sym;
 }
 /** Дата человеческим видом: «31 дек 2026» вместо ISO */
 function fmtDate(iso) {
@@ -407,7 +434,11 @@ function defaults() {
   const C = (name, kind, icon, fixed) => ({ id: uid(), name, kind, icon, fixed: !!fixed, budget: 0, updatedAt: ts, dirty: 1, seed: 1 });
   return {
     v: 1,
-    settings: { rate: 12800, incomeTarget: 0, hours: 176, safety: 6, start: todayStr(), tax: 12, updatedAt: ts, dirty: 1 },
+    /* sv (версию схемы) намеренно НЕ пишем здесь: defaults() шалловым
+       слиянием подмешивается к загруженным настройкам, и метка версии
+       из дефолтов сделала бы миграцию невидимой сама для себя.
+       Ставит её только migrate(). */
+    settings: { rates: { USD: 12800, KZT: 24 }, incomeTarget: 0, hours: 176, safety: 6, tax: 12, updatedAt: ts, dirty: 1 },
     accounts: [
       A("Наличные", "UZS", "💵"),
       A("Карта UZS", "UZS", "💳"),
@@ -482,9 +513,14 @@ const bury = (type, id) => { S.trash[type + ":" + id] = { t: Date.now(), d: 1 };
 const acc = id => S.accounts.find(a => a.id === id);
 const cat = id => S.cats.find(c => c.id === id);
 const goal = id => S.goals.find(g => g.id === id);
-const rate = () => +S.settings.rate || 1;
-/** Сумма операции в базовой валюте (сум) */
-const toBase = t => t.cur === "USD" ? (t.amount || 0) * (+t.rate || rate()) : (t.amount || 0);
+/** Курс доллара — остался отдельной функцией: на него ссылается разметка */
+const rate = () => rateOf("USD");
+/** Сумма операции в базовой валюте (сум).
+    Курс берём зафиксированный в операции — иначе прошлые месяцы
+    пересчитывались бы по сегодняшнему курсу. */
+const toBase = t => !t.cur || t.cur === BASE
+  ? (t.amount || 0)
+  : (t.amount || 0) * (+t.rate || rateOf(t.cur));
 
 /* ---------- Балансы ---------- */
 function balances() {
@@ -508,7 +544,7 @@ function balances() {
  */
 function availableBase() {
   const b = balances();
-  return S.accounts.reduce((s, a) => s + (b[a.id] || 0) * (a.cur === "USD" ? rate() : 1), 0);
+  return S.accounts.reduce((s, a) => s + (b[a.id] || 0) * rateOf(a.cur), 0);
 }
 /** Свободные + отложенные. Для «месяцев свободы» и «запаса прочности»:
     накопления в целях — тоже подушка, их считать надо. */
@@ -634,7 +670,7 @@ function capitalAt(end) {
       m[t.acc2] = (m[t.acc2] || 0) + (t.amount2 != null ? t.amount2 : t.amount);
     }
   });
-  return S.accounts.reduce((s, a) => s + (m[a.id] || 0) * (a.cur === "USD" ? rate() : 1), 0) + pot;
+  return S.accounts.reduce((s, a) => s + (m[a.id] || 0) * rateOf(a.cur), 0) + pot;
 }
 
 /** Расходы месяца по категориям: сумма, число операций, средний чек, медиана */
@@ -742,7 +778,7 @@ function budgetTotal() { return S.cats.filter(c => c.kind === "expense").reduce(
 function goalSaved(g) {
   return S.tx.filter(t => t.kind === "goal" && t.goal === g.id).reduce((s, t) => s + toBase(t), 0) + (+g.initial || 0);
 }
-const goalTargetBase = g => (+g.target || 0) * (g.cur === "USD" ? rate() : 1);
+const goalTargetBase = g => (+g.target || 0) * rateOf(g.cur);
 
 /* ==========================================================
    Синхронизация с Google Sheets через Apps Script
@@ -845,7 +881,7 @@ const SYNC = {
     return {
       id: String(r.id), updatedAt: Number(r.updatedAt) || 0, kind: String(r.kind || "expense"),
       date: String(r.date || todayStr()).slice(0, 10), amount: Number(r.amount) || 0,
-      cur: String(r.cur || "UZS"), rate: num(r.rate), acc: str(r.acc), acc2: str(r.acc2),
+      cur: CUR[String(r.cur)] ? String(r.cur) : BASE, rate: num(r.rate), acc: str(r.acc), acc2: str(r.acc2),
       amount2: num(r.amount2), cat: str(r.cat), goal: str(r.goal),
       note: r.note == null ? "" : String(r.note)
     };
@@ -1103,7 +1139,10 @@ function viewHome() {
   <div class="card">
     <div class="eyebrow">Доступно</div>
     <div class="num big">${nf0.format(Math.round(availableBase()))}<span style="font-size:16px;color:var(--dim)"> сум</span></div>
-    <div class="hint">на счетах · курс ${nf0.format(rate())} за $1</div>
+    <div class="hint">на счетах${(() => {
+      const used = CURS.filter(c => c !== BASE && S.accounts.some(a => a.cur === c));
+      return used.length ? " · курс " + used.map(c => nf0.format(rateOf(c)) + " за 1" + CUR[c].sym).join(", ") : "";
+    })()}</div>
     <hr class="sep">
     ${S.accounts.map(a => `<div class="between" style="padding:4px 0">
         <span class="dim" style="font-size:13px">${a.icon || "•"} ${esc(a.name)}</span>
@@ -1182,7 +1221,7 @@ function txRow(t, showDate) {
   return `<div class="li" data-act="edit" data-id="${t.id}">
     <div class="ic">${icon}</div>
     <div class="t"><b>${esc(title)}</b><span>${esc(sub)}</span></div>
-    <div class="v ${cls}">${sign}${nf0.format(Math.abs(Math.round(t.amount)))}${t.cur === "USD" ? " $" : ""}</div>
+    <div class="v ${cls}">${sign}${nf0.format(Math.abs(Math.round(t.amount)))}${t.cur && t.cur !== BASE ? "\u00A0" + curInfo(t.cur).sym : ""}</div>
   </div>`;
 }
 function viewLog() {
@@ -1400,21 +1439,21 @@ function viewGoals() {
     if (g.deadline && rest > 0) {
       const dl = new Date(g.deadline), now = new Date();
       const k = Math.max(1, Math.round((dl - now) / 2629800000));
-      need = `Чтобы успеть к ${fmtDate(g.deadline)}: ${fmtShortCur((g.cur === "USD" ? rest / rate() : rest) / k, g.cur)} в месяц`;
+      need = `Чтобы успеть к ${fmtDate(g.deadline)}: ${fmtShortCur(rest / rateOf(g.cur) / k, g.cur)} в месяц`;
     }
     return `<div class="card">
       <div class="between"><b style="font-size:16px">${esc(g.name)}</b>
         <button class="badge" data-act="goal-edit" data-id="${g.id}">изменить</button></div>
       <div class="row" style="margin:10px 0 8px;align-items:baseline">
-        <div class="num mid sf">${fmt(g.cur === "USD" ? sv / rate() : sv, g.cur)}</div>
+        <div class="num mid sf">${fmt(sv / rateOf(g.cur), g.cur)}</div>
         <div class="dim" style="font-size:13px">из ${fmt(g.target, g.cur)}</div>
       </div>
       <div class="bar gold"><i style="width:${(p * 100).toFixed(1)}%"></i></div>
       <div class="between" style="margin-top:7px">
-        <span class="dim" style="font-size:12px">${Math.round(p * 100)}% · осталось ${fmtShortCur(g.cur === "USD" ? rest / rate() : rest, g.cur)}</span>
+        <span class="dim" style="font-size:12px">${Math.round(p * 100)}% · осталось ${fmtShortCur(rest / rateOf(g.cur), g.cur)}</span>
         <span class="dim num" style="font-size:12px">${eta}</span></div>
       ${need ? `<div class="hint">${esc(need)}</div>` : ""}
-      ${+g.initial > 0 ? `<div class="hint">Включая ${fmtShortCur(g.cur === "USD" ? (+g.initial) / rate() : +g.initial, g.cur)}, отложенные до начала учёта — этих денег на счетах никогда не было, поэтому в строку «Отложено в цели» на сводке они не входят.</div>` : ""}
+      ${+g.initial > 0 ? `<div class="hint">Включая ${fmtShortCur((+g.initial) / rateOf(g.cur), g.cur)}, отложенные до начала учёта — этих денег на счетах никогда не было, поэтому в строку «Отложено в цели» на сводке они не входят.</div>` : ""}
       ${rest > 0
         ? `<button class="btn sm" data-act="add" data-kind="goal" data-goal="${g.id}" style="margin-top:11px">Пополнить</button>`
         : `<button class="btn ghost sm" data-act="goal-done" data-id="${g.id}" style="margin-top:11px">Цель собрана — закрыть</button>`}
@@ -1477,10 +1516,17 @@ function viewIncome() {
   const record = Math.max(0, ...past.map(x => x.v));
   const recMonth = past.find(x => x.v === record);
   const aheadOfRecord = record > 0 && s.inc > record;
-  const avg3 = (() => { let a = 0, k = 0; for (let i = 1; i <= 3; i++) { const v = monthStats(shiftMonth(cur, -i)).inc; if (v > 0) { a += v; k++; } } return k ? a / k : s.inc; })();
+  /* Среднее берём из baseline(): он отбрасывает месяцы-обрывки — те,
+     где доход есть, а расходов ноль (первый неполный месяц учёта).
+     Раньше здесь был свой подсчёт с фильтром только по доходу, из-за
+     чего 12-дневный июль входил в среднее полным весом, а «цена часа»
+     на «Доходе» и в «Аналитике» показывала два разных числа. */
+  const B3 = baseline(3);
+  const avg3 = B3.months ? B3.inc : s.inc;
   const dm = daysInMonth(cur), day = new Date().getDate(), daysLeft = Math.max(1, dm - day + 1);
   const gap = Math.max(0, target - s.inc);
   const hourly = (+S.settings.hours || 176) > 0 ? avg3 / (+S.settings.hours || 176) : 0;
+  const winLabel = B3.months ? B3.months + " " + plural(B3.months, "закрытый", "закрытых", "закрытых") : "текущий";
 
   /* серия растущих месяцев */
   let streak = 0;
@@ -1523,12 +1569,12 @@ function viewIncome() {
     <div class="card tight"><div class="eyebrow">Рекорд закрытых</div>
       <div class="num mid">${fmtShort(record)}</div>
       <div class="hint">${recMonth && record > 0 ? monthName(recMonth.m) : "—"}${aheadOfRecord ? `<br><span class="tq">этот месяц уже выше: ${fmtShort(s.inc)}</span>` : ""}</div></div>
-    <div class="card tight"><div class="eyebrow">Среднее, 3 закрытых</div>
+    <div class="card tight"><div class="eyebrow">Среднее, ${winLabel}</div>
       <div class="num mid">${fmtShort(avg3)}</div>
       <div class="hint">${record > 0 && avg3 < record ? "до рекорда " + fmtShort(record - avg3) : "на уровне рекорда"}</div></div>
     <div class="card tight"><div class="eyebrow">Цена часа</div>
       <div class="num mid">${fmtShort(hourly)}</div>
-      <div class="hint">3 закрытых месяца ÷ ${S.settings.hours} ч</div></div>
+      <div class="hint">${winLabel} ÷ ${S.settings.hours} ч</div></div>
     <div class="card tight"><div class="eyebrow">Серия роста</div>
       <div class="num mid ${streak > 0 ? "tq" : ""}">${streak}</div>
       <div class="hint">${plural(streak, "закрытый месяц подряд", "закрытых месяца подряд", "закрытых месяцев подряд")} без падения</div></div>
@@ -1537,7 +1583,7 @@ function viewIncome() {
   ${target > 0 ? `<div class="card">
     <div class="between" style="margin-bottom:8px">
       <div class="eyebrow" style="margin:0">Лестница уровней</div>
-      <span class="badge">по 3 закрытым</span></div>
+      <span class="badge">по ${winLabel}</span></div>
     <div class="lvl">${LV.map((l, i) => `<i class="${i < reached ? "on" : ""}"></i>`).join("")}</div>
     <div class="pulse-legend" style="margin-top:6px">${LV.map((l, i) => `<span class="${i === reached - 1 ? "lvl-now" : ""}">${l[0]}</span>`).join("")}</div>
     <div class="hint" style="margin-top:8px">${reached ? `Текущий уровень — <b>${LV[reached - 1][0]}</b>. ` : "Пока ниже первого уровня. "}${next ? `Следующий — <b>${next[0]}</b> при среднем доходе ${fmtShort(target * next[1])} в месяц, это ещё +${fmtShort(target * next[1] - avg3)}.` : "Верхний уровень взят."}</div>
@@ -1617,9 +1663,10 @@ function viewSettings() {
   return `
   <div class="card">
     <div class="eyebrow">Основное</div>
-    <label class="f">Курс доллара, сум за $1</label>
-    <input class="inp" type="number" inputmode="numeric" data-set="rate" data-echo="1" value="${S.settings.rate}">
-    <div class="echo num">${nf0.format(+S.settings.rate || 0)}</div>
+    ${CURS.filter(c => c !== BASE).map(c => `
+      <label class="f">Курс ${CUR[c].gen}, сум за 1${CUR[c].sym}</label>
+      <input class="inp" type="number" inputmode="decimal" step="any" data-set-rate="${c}" data-echo="1" value="${rateOf(c)}">
+      <div class="echo num">1${CUR[c].sym} = ${nf0.format(rateOf(c))} сум</div>`).join("")}
     <label class="f">Цель по доходу в месяц, сум</label>
     <input class="inp" type="number" inputmode="numeric" data-set="incomeTarget" data-echo="1" value="${S.settings.incomeTarget}">
     <div class="echo num">${nf0.format(+S.settings.incomeTarget || 0)}</div>
@@ -1720,7 +1767,7 @@ function newDraft(kind, preset) {
 function draftFromTx(t) {
   return { id: t.id, kind: t.kind, date: t.date, buf: String(t.amount).replace(".", ","), acc: t.acc, acc2: t.acc2, cat: t.cat, goal: t.goal, note: t.note || "" };
 }
-const draftCur = () => (acc(draft.acc) || {}).cur || "UZS";
+const draftCur = () => (acc(draft.acc) || {}).cur || BASE;
 const draftVal = () => { const v = parseFloat(String(draft.buf).replace(",", ".")); return isNaN(v) ? 0 : v; };
 
 function sheetEntry() {
@@ -1743,12 +1790,12 @@ function sheetEntry() {
     <div class="seg" id="kseg">${KINDS.map(k => `<button data-k="${k[0]}" data-act="kind" class="${draft.kind === k[0] ? "on" : ""}">${k[1]}</button>`).join("")}</div>
 
     <div class="amount">
-      <div class="v ${draft.kind === "income" ? "tq" : draft.kind === "goal" ? "sf" : draft.kind === "transfer" ? "lz" : ""}">${esc(shown)}<span style="font-size:20px;color:var(--dim)"> ${c === "USD" ? "$" : "сум"}</span></div>
-      <div class="c">${c === "USD" ? "по курсу " + nf0.format(rate()) + " = " + fmtShort(draftVal() * rate()) + " сум" : "&nbsp;"}</div>
+      <div class="v ${draft.kind === "income" ? "tq" : draft.kind === "goal" ? "sf" : draft.kind === "transfer" ? "lz" : ""}">${esc(shown)}<span style="font-size:20px;color:var(--dim)"> ${curInfo(c).sym}</span></div>
+      <div class="c">${c !== BASE ? "по курсу " + nf0.format(rateOf(c)) + " = " + fmtShort(draftVal() * rateOf(c)) + " сум" : "&nbsp;"}</div>
     </div>
     <div class="pad">
       ${[1,2,3,4,5,6,7,8,9].map(n => `<button data-act="key" data-k="${n}">${n}</button>`).join("")}
-      <button class="alt" data-act="key" data-k="${c === "USD" ? "," : "000"}">${c === "USD" ? "," : "000"}</button>
+      <button class="alt" data-act="key" data-k="${curInfo(c).dec === 2 ? "," : "000"}">${curInfo(c).dec === 2 ? "," : "000"}</button>
       <button data-act="key" data-k="0">0</button>
       <button class="alt" data-act="key" data-k="del">⌫</button>
     </div>
@@ -1801,13 +1848,17 @@ function saveTx() {
   if (draft.kind === "transfer" && draft.acc === draft.acc2) return toast("Счета должны отличаться");
   const c = draftCur();
   const t = {
-    id: draft.id || uid(), kind: draft.kind, date: draft.date, amount: v, cur: c, rate: rate(),
+    id: draft.id || uid(), kind: draft.kind, date: draft.date, amount: v, cur: c, rate: rateOf(c),
     acc: draft.acc, note: (draft.note || "").trim(), updatedAt: Date.now(), dirty: 1
   };
   if (draft.kind === "transfer") {
     t.acc2 = draft.acc2;
     const c2 = (acc(draft.acc2) || {}).cur;
-    if (c2 !== c) t.amount2 = draft.amount2 != null && draft.amount2 !== "" ? +draft.amount2 : (c === "USD" ? v * rate() : v / rate());
+    /* Кросс-курс через базу: сумма в валюте «откуда» → сум → валюта «куда».
+       Прежняя формула умела только пару сум/доллар. */
+    if (c2 !== c) t.amount2 = draft.amount2 != null && draft.amount2 !== ""
+      ? +draft.amount2
+      : v * rateOf(c) / rateOf(c2);
     else t.amount2 = v;
   } else if (draft.kind === "goal") t.goal = draft.goal;
   else t.cat = draft.cat;
@@ -1823,16 +1874,19 @@ function saveTx() {
 
 /* ---------- Шторки справочников ---------- */
 function sheetGoal(id) {
-  const g = id ? goal(id) : { id: null, name: "", target: "", cur: "UZS", deadline: "", initial: 0, done: false };
+  const g = id ? goal(id) : { id: null, name: "", target: "", cur: BASE, deadline: "", initial: 0, done: false };
   openSheet(`<div class="grab"></div>
     <div class="eyebrow">${id ? "Цель" : "Новая цель"}</div>
     <label class="f">Название</label><input class="inp" id="g_name" value="${esc(g.name)}" placeholder="Резерв, машина, отпуск">
     <label class="f">Сумма цели</label><input class="inp" id="g_target" type="number" inputmode="decimal" value="${g.target}">
     <label class="f">Валюта цели</label>
-    <select class="inp" id="g_cur"><option value="UZS" ${g.cur === "UZS" ? "selected" : ""}>Сум</option><option value="USD" ${g.cur === "USD" ? "selected" : ""}>Доллар</option></select>
+    <select class="inp" id="g_cur">${curOptions(g.cur)}</select>
     <label class="f">Уже отложено (не через приложение)</label><input class="inp" id="g_init" type="number" inputmode="decimal" value="${+g.initial || 0}">
     <div class="hint">В сумах. Учтётся в прогрессе, но не в балансе счетов.</div>
     <label class="f">Срок (необязательно)</label><input class="inp" id="g_dl" type="date" value="${g.deadline || ""}">
+    <div class="hint">«Уже отложено» — деньги, которых нет ни на одном счёте в приложении.
+      Прогресс цели = «уже отложено» + взносы, поэтому если ту же сумму потом внести взносом,
+      цель посчитает её дважды и уйдёт за 100%.</div>
     <label class="f"><input type="checkbox" id="g_done" ${g.done ? "checked" : ""}> Цель закрыта</label>
     <div class="hint">Закрытая цель считается потраченной: её деньги уходят из копилки. Если тратить не собираешься — сначала верни их на счёт.</div>
     ${id && goalNet(id) > 0 ? `
@@ -1848,13 +1902,13 @@ function sheetGoal(id) {
       ${id ? `<button class="btn danger sm" data-act="goal-del" data-id="${id}">Удалить</button>` : ""}</div>`);
 }
 function sheetAcc(id) {
-  const a = id ? acc(id) : { id: null, name: "", cur: "UZS", icon: "💳", opening: 0 };
+  const a = id ? acc(id) : { id: null, name: "", cur: BASE, icon: "💳", opening: 0 };
   openSheet(`<div class="grab"></div>
     <div class="eyebrow">${id ? "Счёт" : "Новый счёт"}</div>
     <label class="f">Название</label><input class="inp" id="a_name" value="${esc(a.name)}">
     <label class="f">Значок</label><input class="inp" id="a_icon" value="${esc(a.icon)}" maxlength="2">
     <label class="f">Валюта</label>
-    <select class="inp" id="a_cur"><option value="UZS" ${a.cur === "UZS" ? "selected" : ""}>Сум</option><option value="USD" ${a.cur === "USD" ? "selected" : ""}>Доллар</option></select>
+    <select class="inp" id="a_cur">${curOptions(a.cur)}</select>
     <label class="f">Начальный остаток</label><input class="inp" id="a_open" type="number" inputmode="decimal" value="${+a.opening || 0}">
     <div style="height:14px"></div>
     <button class="btn" data-act="acc-save" data-id="${id || ""}">Сохранить</button>
@@ -1978,8 +2032,8 @@ document.addEventListener("click", e => {
       /* Возврат — тот же взнос с обратным знаком: балансы, копилка и прогресс
          пересчитываются сами, история при этом сохраняется целиком */
       S.tx.push({
-        id: uid(), kind: "goal", date: todayStr(), cur: a.cur, rate: rate(),
-        amount: -(a.cur === "USD" ? net / rate() : net),
+        id: uid(), kind: "goal", date: todayStr(), cur: a.cur, rate: rateOf(a.cur),
+        amount: -(net / rateOf(a.cur)),
         acc: accId, goal: id, note: "возврат из цели", updatedAt: Date.now(), dirty: 1
       });
       save(); closeSheet(); render(); toast("Возвращено " + fmtShort(net)); break;
@@ -2049,11 +2103,21 @@ document.addEventListener("change", e => {
     S.sync.status = ""; S.sync.err = ""; S.sync.fails = 0; save(); render();
     return;
   }
+  if (el.dataset.setRate) {
+    const c = el.dataset.setRate, v = +el.value;
+    S.settings.rates = S.settings.rates || {};
+    S.settings.rates[c] = v > 0 ? v : 1;
+    /* Плоское поле оставляем в синхронизации для старых версий приложения */
+    if (c === "USD") S.settings.rate = S.settings.rates.USD;
+    S.settings.updatedAt = Date.now(); S.settings.dirty = 1;
+    save();
+    toast("Курс " + CUR[c].gen + " обновлён");
+    return;
+  }
   if (el.dataset.set) {
     S.settings[el.dataset.set] = +el.value || 0;
     S.settings.updatedAt = Date.now(); S.settings.dirty = 1;
     save();
-    if (el.dataset.set === "rate") toast("Курс обновлён");
     return;
   }
   if (el.dataset.setD && draft) {
@@ -2086,7 +2150,11 @@ document.addEventListener("input", e => {
   /* Эхо считаем прямо при вводе: перерисовка экрана съела бы фокус и каретку */
   if (e.target.dataset.echo) {
     const echo = e.target.nextElementSibling;
-    if (echo && echo.classList.contains("echo")) echo.textContent = nf0.format(+e.target.value || 0);
+    if (!echo || !echo.classList.contains("echo")) return;
+    const c = e.target.dataset.setRate;
+    echo.textContent = c
+      ? "1" + CUR[c].sym + " = " + nf0.format(+e.target.value || 0) + " сум"
+      : nf0.format(+e.target.value || 0);
   }
 });
 $("fab").addEventListener("click", () => { draft = newDraft("expense"); sheetEntry(); });
@@ -2139,8 +2207,29 @@ function migrate() {
   }));
   /* Поля, добавленные позже старта: у ранних пользователей их нет,
      и в настройках рисуется value="undefined" */
+  /* Курс доллара раньше лежал плоским полем settings.rate; теперь курсы
+     живут в карте rates.
+     ВАЖНО про версию схемы: настройки грузятся как
+     Object.assign(defaults().settings, saved.settings), то есть шалловым
+     слиянием. Вложенный объект rates из defaults() при этом ЦЕЛИКОМ
+     побеждает — у пользователя с версией без rates дефолтные 12800 молча
+     затирали его настоящие 11800, а потом уезжали в таблицу. Отличить
+     «rates ещё не было» от «rates уже настроен» можно только по номеру
+     схемы, поэтому он здесь и появился. Любое следующее вложенное поле
+     в settings обязано мигрироваться через sv, а не через проверку
+     «пустое ли оно». */
+  if (!S.settings.rates || typeof S.settings.rates !== "object") S.settings.rates = {};
+  if (!(+S.settings.sv >= 2)) {
+    /* У свежей установки плоского rate нет вовсе — тогда остаётся дефолт */
+    if (+S.settings.rate > 0) S.settings.rates.USD = +S.settings.rate;
+    S.settings.sv = 2;
+  }
   const def = defaults().settings;
   Object.keys(def).forEach(k => { if (S.settings[k] === undefined) S.settings[k] = def[k]; });
+  CURS.forEach(c => { if (c !== BASE && !(+S.settings.rates[c] > 0)) S.settings.rates[c] = def.rates[c] || 1; });
+  /* Плоское поле держим в синхронизации: старые версии на других
+     устройствах читают курс доллара только из него. */
+  S.settings.rate = +S.settings.rates.USD || 1;
   if (!S.settings.updatedAt) S.settings.updatedAt = now;
   if (neverSynced) S.settings.dirty = 1;
 }
